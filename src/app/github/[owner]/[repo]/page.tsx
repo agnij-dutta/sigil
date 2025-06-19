@@ -54,7 +54,7 @@ export default function RepositoryDetailsPage() {
       } else {
         setError('Failed to fetch repository details');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to fetch repository details');
     } finally {
       setIsLoading(false);

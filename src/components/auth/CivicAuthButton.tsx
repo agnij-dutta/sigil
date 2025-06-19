@@ -10,7 +10,6 @@ interface CivicAuthButtonProps {
 
 export default function CivicAuthButton({ 
   className = '', 
-  onSuccess, 
   onError 
 }: CivicAuthButtonProps) {
   const [isLoading, setIsLoading] = useState(false);

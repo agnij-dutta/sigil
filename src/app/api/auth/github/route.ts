@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { githubAuth } from '@/lib/github/auth';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Generate a secure state parameter for CSRF protection
     const state = crypto.randomUUID();

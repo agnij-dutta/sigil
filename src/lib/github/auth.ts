@@ -126,7 +126,7 @@ class GitHubAuth {
       const octokit = this.createOctokitInstance(accessToken);
       await octokit.rest.users.getAuthenticated();
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

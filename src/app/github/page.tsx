@@ -53,7 +53,7 @@ export default function GitHubRepositoriesPage() {
         setError('Please connect your GitHub account first');
         setIsLoading(false);
       }
-    } catch (err) {
+    } catch {
       setError('Failed to fetch authentication data');
       setIsLoading(false);
     }
@@ -71,7 +71,7 @@ export default function GitHubRepositoriesPage() {
       } else {
         setError('Failed to fetch repositories');
       }
-    } catch (err) {
+    } catch {
       setError('Failed to fetch repositories');
     } finally {
       setIsLoading(false);
@@ -144,7 +144,7 @@ export default function GitHubRepositoriesPage() {
           )}
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              {authData?.github?.user.name || authData?.github?.user.login}'s Repositories
+              {authData?.github?.user.name || authData?.github?.user.login}&apos;s Repositories
             </h1>
             <p className="text-gray-600">
               {authData?.github?.user.public_repos} public repositories

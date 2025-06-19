@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { GitHubDataService } from '@/lib/github/data';
+import { AuthToken } from '@/types/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     const decoded = jwt.verify(
       authCookie,
       process.env.JWT_SECRET || 'fallback-secret'
-    ) as any;
+    ) as AuthToken;
 
     if (!decoded.github?.accessToken) {
       return NextResponse.json(

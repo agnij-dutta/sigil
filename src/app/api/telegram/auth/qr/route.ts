@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       sessionId,
       status: session.status,
-      user: session.data?.user || null,
+      user: session.user || null,
     });
   } catch (error) {
     console.error('Telegram session check error:', error);

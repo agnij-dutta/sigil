@@ -4,8 +4,9 @@ import { GitHubDataService } from '@/lib/github/data';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { owner: string; repo: string } }
+  { params }: { params: Promise<{ owner: string; repo: string }> }
 ) {
+  const resolvedParams = await params;
   try {
     // Verify authentication
     const authCookie = request.cookies.get('tipdao_auth')?.value;
@@ -19,7 +20,7 @@ export async function GET(
     const decoded = jwt.verify(
       authCookie,
       process.env.JWT_SECRET || 'fallback-secret'
-    ) as any;
+    ) as { github?: { accessToken: string } };
 
     if (!decoded.github?.accessToken) {
       return NextResponse.json(
@@ -38,7 +39,7 @@ export async function GET(
     const githubService = new GitHubDataService(decoded.github.accessToken);
 
     // Fetch branches
-    const branches = await githubService.getBranches(params.owner, params.repo, {
+    const branches = await githubService.getBranches(resolvedParams.owner, resolvedParams.repo, {
       protected: protected_only,
       per_page,
       page,
