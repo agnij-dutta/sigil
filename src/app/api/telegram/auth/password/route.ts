@@ -3,22 +3,22 @@ import { telegramAuth } from '@/lib/telegram/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, phoneNumber } = await request.json();
+    const { sessionId, password } = await request.json();
     
-    if (!sessionId || !phoneNumber) {
+    if (!sessionId || !password) {
       return NextResponse.json(
-        { error: 'sessionId and phoneNumber are required' },
+        { error: 'sessionId and password are required' },
         { status: 400 }
       );
     }
 
-    const result = await telegramAuth.sendPhoneNumber(sessionId, phoneNumber);
+    const result = await telegramAuth.verifyPassword(sessionId, password);
     
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error sending phone number:', error);
+    console.error('Error verifying password:', error);
     return NextResponse.json(
-      { error: 'Failed to send phone number' },
+      { error: 'Failed to verify password' },
       { status: 500 }
     );
   }

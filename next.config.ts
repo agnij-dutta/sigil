@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  serverExternalPackages: ["telegram", "grammy", "@civic/auth"],
+  serverExternalPackages: ["grammy", "@civic/auth"],
   env: {
     CIVIC_CLIENT_ID: process.env.CIVIC_CLIENT_ID,
     GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,

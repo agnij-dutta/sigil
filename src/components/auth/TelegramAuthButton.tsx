@@ -1,463 +1,359 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 
-interface TelegramAuthButtonProps {
-  className?: string;
-  onSuccess?: (user: any) => void; // eslint-disable-line @typescript-eslint/no-explicit-any
-  onError?: (error: Error) => void;
-}
-
-// Telegram Login Widget data interface
-interface TelegramLoginData {
+interface TelegramUser {
   id: number;
   first_name: string;
   last_name?: string;
   username?: string;
-  photo_url?: string;
-  auth_date: number;
-  hash: string;
+  phone_number?: string;
+  is_bot?: boolean;
+  language_code?: string;
 }
 
-// Extend window to include Telegram callback
-declare global {
-  interface Window {
-    TelegramLoginWidget?: {
-      onTelegramAuth: (user: TelegramLoginData) => void;
-    };
-  }
+interface TelegramAuthButtonProps {
+  className?: string;
+  onSuccess?: (user: TelegramUser, sessionString: string) => void;
+  onError?: (error: string) => void;
 }
+
+type AuthStep = 'start' | 'phone' | 'code' | 'password' | 'success' | 'error';
 
 export default function TelegramAuthButton({ 
   className = '', 
-  onSuccess, 
+  onSuccess,
   onError 
 }: TelegramAuthButtonProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [showQR, setShowQR] = useState(false);
-  const [showPhoneAuth, setShowPhoneAuth] = useState(false);
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [authCode, setAuthCode] = useState('');
-  const [authMode, setAuthMode] = useState<'widget' | 'qr' | 'phone'>('widget');
-  const [isPhoneStage, setIsPhoneStage] = useState<'number' | 'code'>('number');
-  const [botConfig, setBotConfig] = useState<{ botUsername: string; hasToken: boolean } | null>(null);
-  const widgetRef = useRef<HTMLDivElement>(null);
+  const [step, setStep] = useState<AuthStep>('start');
+  const [sessionId, setSessionId] = useState<string>('');
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
+  const [code, setCode] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [user, setUser] = useState<TelegramUser | null>(null);
 
-  // Load bot configuration
-  useEffect(() => {
-    const loadBotConfig = async () => {
-      try {
-        const response = await fetch('/api/telegram/config');
-        if (response.ok) {
-          const config = await response.json();
-          setBotConfig(config);
-        }
-      } catch (error) {
-        console.error('Failed to load bot config:', error);
-      }
-    };
-
-    loadBotConfig();
-  }, []);
-
-  // Initialize Telegram Login Widget
-  useEffect(() => {
-    if (authMode === 'widget' && botConfig?.hasToken && botConfig?.botUsername !== 'your_bot_username_here') {
-      loadTelegramWidget();
-    }
-  }, [authMode, botConfig]);
-
-  const loadTelegramWidget = () => {
-    if (!botConfig?.botUsername || botConfig.botUsername === 'your_bot_username_here') {
-      onError?.(new Error('Telegram bot not configured. Please set TELEGRAM_BOT_USERNAME and TELEGRAM_BOT_TOKEN.'));
-      return;
-    }
-
-    // Set up global callback
-    window.TelegramLoginWidget = {
-      onTelegramAuth: handleTelegramAuth
-    };
-
-    // Load Telegram widget script
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.setAttribute('data-telegram-login', botConfig.botUsername);
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-onauth', 'TelegramLoginWidget.onTelegramAuth(user)');
-    script.setAttribute('data-request-access', 'write');
-
-    if (widgetRef.current) {
-      widgetRef.current.appendChild(script);
-    }
-
-    return () => {
-      if (widgetRef.current) {
-        widgetRef.current.innerHTML = '';
-      }
-      delete window.TelegramLoginWidget;
-    };
+  const handleError = (errorMessage: string) => {
+    setError(errorMessage);
+    setStep('error');
+    onError?.(errorMessage);
   };
 
-  const handleTelegramAuth = async (user: TelegramLoginData) => {
-    try {
-      setIsLoading(true);
+  const startAuth = async () => {
+    setLoading(true);
+    setError('');
 
-      // Verify the authentication with our backend
-      const response = await fetch('/api/telegram/auth/verify', {
+    try {
+      const response = await fetch('/api/telegram/auth/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(user)
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to verify Telegram authentication');
-      }
-
       const data = await response.json();
-      if (data.success) {
-        onSuccess?.(data.user);
-      } else {
-        throw new Error('Authentication verification failed');
+
+      if (data.error) {
+        handleError(data.error);
+        return;
       }
 
-    } catch (error) {
-      console.error('Telegram auth error:', error);
-      onError?.(error as Error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const generateQR = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch('/api/telegram/auth/qr', {
-        method: 'POST',
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate QR code');
-      }
-      
-      const data = await response.json();
-      setQrCode(data.qrCode);
       setSessionId(data.sessionId);
-      setShowQR(true);
-      
-      // Note: QR polling removed to prevent 404 errors
-      // In a real implementation, you'd use websockets or server-sent events
-      
+      setStep('phone');
     } catch (error) {
-      console.error('QR generation error:', error);
-      onError?.(error as Error);
+      handleError('Failed to start authentication');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handlePhoneAuth = async () => {
+  const sendPhoneNumber = async () => {
     if (!phoneNumber.trim()) {
-      onError?.(new Error('Phone number is required'));
+      setError('Please enter your phone number');
       return;
     }
-    
+
+    setLoading(true);
+    setError('');
+
     try {
-      setIsLoading(true);
-      
       const response = await fetch('/api/telegram/auth/phone', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ phoneNumber: phoneNumber.trim() })
+        body: JSON.stringify({
+          sessionId,
+          phoneNumber: phoneNumber.trim()
+        }),
       });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send verification code');
-      }
-      
+
       const data = await response.json();
-      setSessionId(data.sessionId);
-      setIsPhoneStage('code');
-      setShowPhoneAuth(true);
-      
-      // In development, show the auth code
-      if (process.env.NODE_ENV === 'development' && data.authCode) {
-        console.log('Development auth code:', data.authCode);
-        alert(`Development mode: Your auth code is ${data.authCode}`);
+
+      if (data.error) {
+        handleError(data.error);
+        return;
       }
-      
+
+      if (data.success) {
+        setStep('code');
+      } else {
+        handleError('Failed to send verification code');
+      }
     } catch (error) {
-      console.error('Phone auth error:', error);
-      onError?.(error as Error);
+      handleError('Failed to send phone number');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleCodeVerification = async () => {
-    if (!authCode.trim() || !sessionId) {
-      onError?.(new Error('Verification code is required'));
+  const verifyCode = async () => {
+    if (!code.trim()) {
+      setError('Please enter the verification code');
       return;
     }
-    
+
+    setLoading(true);
+    setError('');
+
     try {
-      setIsLoading(true);
-      
       const response = await fetch('/api/telegram/auth/phone/verify', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          sessionId, 
-          code: authCode.trim() 
-        })
+        body: JSON.stringify({
+          sessionId,
+          code: code.trim()
+        }),
       });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Invalid verification code');
-      }
-      
+
       const data = await response.json();
-      if (data.success && data.user) {
-        onSuccess?.(data.user);
-        resetForm();
-      } else {
-        throw new Error('Verification failed');
+
+      if (data.error) {
+        if (data.needsPassword) {
+          setStep('password');
+          setError('Two-factor authentication required');
+        } else {
+          handleError(data.error);
+        }
+        return;
       }
-      
+
+      if (data.success && data.user && data.sessionString) {
+        setUser(data.user);
+        setStep('success');
+        onSuccess?.(data.user, data.sessionString);
+      } else {
+        handleError('Failed to verify code');
+      }
     } catch (error) {
-      console.error('Code verification error:', error);
-      onError?.(error as Error);
+      handleError('Failed to verify code');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const resetForm = () => {
-    setShowQR(false);
-    setShowPhoneAuth(false);
-    setQrCode(null);
-    setSessionId(null);
+  const verifyPassword = async () => {
+    if (!password.trim()) {
+      setError('Please enter your 2FA password');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/telegram/auth/password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          password: password.trim()
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        handleError(data.error);
+        return;
+      }
+
+      if (data.success && data.user && data.sessionString) {
+        setUser(data.user);
+        setStep('success');
+        onSuccess?.(data.user, data.sessionString);
+      } else {
+        handleError('Failed to verify password');
+      }
+    } catch (error) {
+      handleError('Failed to verify password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetAuth = () => {
+    setStep('start');
+    setSessionId('');
     setPhoneNumber('');
-    setAuthCode('');
-    setIsPhoneStage('number');
-    if (widgetRef.current) {
-      widgetRef.current.innerHTML = '';
-    }
-    if (authMode === 'widget' && botConfig?.hasToken) {
-      setTimeout(loadTelegramWidget, 100);
-    }
+    setCode('');
+    setPassword('');
+    setError('');
+    setUser(null);
   };
 
-  const handleCancel = () => {
-    resetForm();
-  };
-
-  if (!botConfig) {
+  if (step === 'start') {
     return (
-      <div className={`flex items-center justify-center p-4 ${className}`}>
-        <div className="text-gray-500">Loading Telegram configuration...</div>
+      <button
+        onClick={startAuth}
+        disabled={loading}
+        className={`
+          inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium
+          transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+          ${loading 
+            ? 'bg-gray-400 cursor-not-allowed text-white' 
+            : 'bg-blue-500 hover:bg-blue-600 text-white'
+          }
+          ${className}
+        `}
+      >
+        {loading && (
+          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        )}
+        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+        </svg>
+        Connect with Telegram
+      </button>
+    );
+  }
+
+  if (step === 'success') {
+    return (
+      <div className={`text-green-600 ${className}`}>
+        <div className="flex items-center gap-2">
+          <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span>Connected as {user?.first_name} {user?.last_name}</span>
+        </div>
+        <button 
+          onClick={resetAuth}
+          className="mt-2 text-sm text-blue-500 hover:text-blue-700"
+        >
+          Connect different account
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {!showQR && !showPhoneAuth && (
-        <>
-          <div className="flex space-x-2 mb-4">
+    <div className={`space-y-4 ${className}`}>
+      {step === 'phone' && (
+        <div className="space-y-3">
+          <h3 className="text-lg font-medium">Enter your phone number</h3>
+          <p className="text-sm text-gray-600">
+            We'll send you a verification code via Telegram
+          </p>
+          <div className="flex space-x-2">
+            <input
+              type="tel"
+              value={phoneNumber}
+              onChange={(e) => setPhoneNumber(e.target.value)}
+              placeholder="+1234567890"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
             <button
-              onClick={() => setAuthMode('widget')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                authMode === 'widget' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-              disabled={!botConfig.hasToken || botConfig.botUsername === 'your_bot_username_here'}
+              onClick={sendPhoneNumber}
+              disabled={loading}
+              className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:bg-gray-400"
             >
-              Login Widget
-            </button>
-            <button
-              onClick={() => setAuthMode('qr')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                authMode === 'qr' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              QR Code
-            </button>
-            <button
-              onClick={() => setAuthMode('phone')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                authMode === 'phone' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              Phone
-            </button>
-          </div>
-
-          {authMode === 'widget' && (
-            <div className="space-y-4">
-              {botConfig.hasToken && botConfig.botUsername !== 'your_bot_username_here' ? (
-                <>
-                  <div className="text-sm text-gray-600 mb-2">
-                    Click the button below to authenticate with Telegram:
-                  </div>
-                  <div ref={widgetRef} className="telegram-widget-container" />
-                  {isLoading && (
-                    <div className="text-center text-sm text-gray-500">
-                      Verifying authentication...
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="text-yellow-800 text-sm">
-                    <strong>Configuration Required:</strong>
-                    <br />
-                    Please set your TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME environment variables to enable Telegram authentication.
-                    <br />
-                    <br />
-                    <strong>Steps:</strong>
-                    <br />
-                    1. Create a bot with @BotFather on Telegram
-                    <br />
-                    2. Get your bot token and username
-                    <br />
-                    3. Add them to your .env.local file
-                    <br />
-                    4. Set domain for your bot using @BotFather (/setdomain command)
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {authMode === 'qr' && (
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600">
-                Generate a QR code to authenticate with Telegram mobile app
-              </div>
-              <button
-                onClick={generateQR}
-                disabled={isLoading}
-                className={`w-full px-6 py-3 rounded-lg font-medium transition-colors ${
-                  isLoading
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                } ${className}`}
-              >
-                {isLoading ? 'Generating...' : 'Generate QR Code'}
-              </button>
-            </div>
-          )}
-
-          {authMode === 'phone' && (
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600">
-                Enter your phone number to receive a verification code
-              </div>
-              <input
-                type="tel"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="+1234567890"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isLoading}
-              />
-              <button
-                onClick={handlePhoneAuth}
-                disabled={isLoading || !phoneNumber.trim()}
-                className={`w-full px-6 py-3 rounded-lg font-medium transition-colors ${
-                  isLoading || !phoneNumber.trim()
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                } ${className}`}
-              >
-                {isLoading ? 'Sending...' : 'Send Verification Code'}
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
-      {showQR && qrCode && (
-        <div className="space-y-4">
-          <div className="text-center">
-            <div className="text-lg font-medium mb-2">Scan QR Code</div>
-            <div className="text-sm text-gray-600 mb-4">
-              Scan this QR code with your Telegram app to authenticate
-            </div>
-            <div className="flex justify-center mb-4">
-              <img src={qrCode} alt="QR Code" className="border rounded-lg" />
-            </div>
-            <button
-              onClick={handleCancel}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              Cancel
+              {loading ? 'Sending...' : 'Send Code'}
             </button>
           </div>
         </div>
       )}
 
-      {showPhoneAuth && (
-        <div className="space-y-4">
-          {isPhoneStage === 'code' && (
-            <>
-              <div className="text-center">
-                <div className="text-lg font-medium mb-2">Enter Verification Code</div>
-                <div className="text-sm text-gray-600 mb-4">
-                  Enter the 6-digit code sent to {phoneNumber}
-                </div>
-              </div>
-              <input
-                type="text"
-                value={authCode}
-                onChange={(e) => setAuthCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="123456"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-2xl tracking-wider"
-                disabled={isLoading}
-                maxLength={6}
-              />
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCodeVerification}
-                  disabled={isLoading || authCode.length !== 6}
-                  className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                    isLoading || authCode.length !== 6
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                >
-                  {isLoading ? 'Verifying...' : 'Verify'}
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="px-4 py-3 text-gray-600 hover:text-gray-800 transition-colors"
-                  disabled={isLoading}
-                >
-                  Cancel
-                </button>
-              </div>
-            </>
-          )}
+      {step === 'code' && (
+        <div className="space-y-3">
+          <h3 className="text-lg font-medium">Enter verification code</h3>
+          <p className="text-sm text-gray-600">
+            Check your Telegram app for the verification code
+          </p>
+          <div className="flex space-x-2">
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="12345"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+            <button
+              onClick={verifyCode}
+              disabled={loading}
+              className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:bg-gray-400"
+            >
+              {loading ? 'Verifying...' : 'Verify'}
+            </button>
+          </div>
         </div>
       )}
+
+      {step === 'password' && (
+        <div className="space-y-3">
+          <h3 className="text-lg font-medium">Enter 2FA password</h3>
+          <p className="text-sm text-gray-600">
+            Your account has two-factor authentication enabled
+          </p>
+          <div className="flex space-x-2">
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Your 2FA password"
+              className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={loading}
+            />
+            <button
+              onClick={verifyPassword}
+              disabled={loading}
+              className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:bg-gray-400"
+            >
+              {loading ? 'Verifying...' : 'Verify'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {error && step !== 'password' && (
+        <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+          <div className="flex">
+            <svg className="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <div className="ml-3">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button 
+        onClick={resetAuth}
+        className="text-sm text-gray-500 hover:text-gray-700"
+      >
+        ← Back to start
+      </button>
     </div>
   );
-} 
+}

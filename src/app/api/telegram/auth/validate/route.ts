@@ -3,22 +3,22 @@ import { telegramAuth } from '@/lib/telegram/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, phoneNumber } = await request.json();
+    const { sessionString } = await request.json();
     
-    if (!sessionId || !phoneNumber) {
+    if (!sessionString) {
       return NextResponse.json(
-        { error: 'sessionId and phoneNumber are required' },
+        { error: 'sessionString is required' },
         { status: 400 }
       );
     }
 
-    const result = await telegramAuth.sendPhoneNumber(sessionId, phoneNumber);
+    const result = await telegramAuth.validateSession(sessionString);
     
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error sending phone number:', error);
+    console.error('Error validating session:', error);
     return NextResponse.json(
-      { error: 'Failed to send phone number' },
+      { error: 'Failed to validate session' },
       { status: 500 }
     );
   }
