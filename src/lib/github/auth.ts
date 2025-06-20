@@ -36,7 +36,7 @@ class GitHubAuth {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
-      scope: 'user:email,public_repo,read:org',
+      scope: 'user:email,repo,read:org,read:user', // Enhanced scopes for private repo access
       state: state,
       allow_signup: 'true'
     });

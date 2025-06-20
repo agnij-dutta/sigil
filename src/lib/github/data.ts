@@ -459,4 +459,180 @@ export class GitHubDataService {
       throw error;
     }
   }
+
+  /**
+   * Get repositories where the user is a collaborator (including private repos)
+   */
+  async getCollaborativeRepositories(params?: {
+    affiliation?: 'owner' | 'collaborator' | 'organization_member';
+    sort?: 'created' | 'updated' | 'pushed' | 'full_name';
+    direction?: 'asc' | 'desc';
+    per_page?: number;
+    page?: number;
+  }): Promise<Repository[]> {
+    try {
+      // Get all repos including those where user is a collaborator
+      const { data } = await this.octokit.rest.repos.listForAuthenticatedUser({
+        affiliation: params?.affiliation || 'owner,collaborator,organization_member',
+        sort: params?.sort || 'updated',
+        direction: params?.direction || 'desc',
+        per_page: params?.per_page || 100,
+        page: params?.page || 1,
+      });
+
+      // Filter to only include private repos where user has push access or is a collaborator
+      const collaborativeRepos = data.filter(repo => 
+        repo.private && (
+          repo.permissions?.push === true || 
+          repo.permissions?.admin === true ||
+          repo.permissions?.maintain === true
+        )
+      );
+
+      return collaborativeRepos as Repository[];
+    } catch (error) {
+      console.error('Error fetching collaborative repositories:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user's commits from a specific private repository (where they are a collaborator)
+   */
+  async getUserCommitsFromRepo(owner: string, repo: string, username: string, params?: {
+    sha?: string;
+    path?: string;
+    since?: string;
+    until?: string;
+    per_page?: number;
+    page?: number;
+  }): Promise<Commit[]> {
+    try {
+      // First verify the user has access to this repository
+      const repository = await this.getRepository(owner, repo);
+      if (!repository.permissions?.pull) {
+        throw new Error('Access denied: User does not have access to this repository');
+      }
+
+      // Get commits and filter by the authenticated user
+      const { data } = await this.octokit.rest.repos.listCommits({
+        owner,
+        repo,
+        author: username, // Filter commits by the specific user
+        sha: params?.sha,
+        path: params?.path,
+        since: params?.since,
+        until: params?.until,
+        per_page: params?.per_page || 30,
+        page: params?.page || 1,
+      });
+
+      return data as Commit[];
+    } catch (error) {
+      console.error('Error fetching user commits:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed commit information including file changes and stats
+   */
+  async getCommitDetails(owner: string, repo: string, sha: string): Promise<{
+    commit: Commit;
+    files: Array<{
+      filename: string;
+      status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged';
+      additions: number;
+      deletions: number;
+      changes: number;
+      patch?: string;
+    }>;
+    stats: {
+      additions: number;
+      deletions: number;
+      total: number;
+    };
+  }> {
+    try {
+      const { data } = await this.octokit.rest.repos.getCommit({
+        owner,
+        repo,
+        ref: sha,
+      });
+
+      const files = data.files?.map(file => ({
+        filename: file.filename,
+        status: file.status as 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged',
+        additions: file.additions,
+        deletions: file.deletions,
+        changes: file.changes,
+        patch: file.patch,
+      })) || [];
+
+      return {
+        commit: data as Commit,
+        files,
+        stats: {
+          additions: data.stats?.additions || 0,
+          deletions: data.stats?.deletions || 0,
+          total: data.stats?.total || 0,
+        },
+      };
+    } catch (error) {
+      console.error('Error fetching commit details:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user is a collaborator on a repository
+   */
+  async isCollaborator(owner: string, repo: string, username: string): Promise<boolean> {
+    try {
+      await this.octokit.rest.repos.checkCollaborator({
+        owner,
+        repo,
+        username,
+      });
+      return true;
+    } catch (error: any) {
+      if (error?.status === 404) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get repository permission level for the authenticated user
+   */
+  async getRepositoryPermission(owner: string, repo: string): Promise<{
+    permission: 'admin' | 'write' | 'read' | 'none';
+    user: {
+      login: string;
+      avatar_url: string;
+      html_url: string;
+    };
+  } | null> {
+    try {
+      const user = await this.octokit.rest.users.getAuthenticated();
+      const { data } = await this.octokit.rest.repos.getCollaboratorPermissionLevel({
+        owner,
+        repo,
+        username: user.data.login,
+      });
+
+      return data as {
+        permission: 'admin' | 'write' | 'read' | 'none';
+        user: {
+          login: string;
+          avatar_url: string;
+          html_url: string;
+        };
+      };
+    } catch (error) {
+      console.error('Error fetching repository permission:', error);
+      return null;
+    }
+  }
 }
