@@ -1,5 +1,8 @@
 import { TelegramUser, TelegramChat, TelegramMessage, telegramAuth } from './auth';
 import TelegramBot from 'node-telegram-bot-api';
+import { TelegramClient } from 'telegram';
+import { StringSession } from 'telegram/sessions';
+import { Api } from 'telegram/tl';
 
 export interface TelegramChatListOptions {
   limit?: number;
@@ -86,6 +89,432 @@ export interface TelegramUpdate {
     offset: string;
   };
 }
+
+export interface TelegramChat {
+  id: string;
+  type: 'private' | 'group' | 'supergroup' | 'channel';
+  title?: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  photo?: {
+    small_file_id: string;
+    big_file_id: string;
+    photo_url?: string;
+  };
+  description?: string;
+  participant_count?: number;
+  unread_count?: number;
+  last_message?: {
+    id: number;
+    text?: string;
+    date: number;
+    from_user?: string;
+  };
+  permissions?: {
+    can_send_messages?: boolean;
+    can_send_media?: boolean;
+    can_add_users?: boolean;
+    can_pin_messages?: boolean;
+  };
+  is_verified?: boolean;
+  is_scam?: boolean;
+  is_fake?: boolean;
+}
+
+export interface TelegramMessage {
+  id: number;
+  chat_id: string;
+  from_user?: {
+    id: string;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+  };
+  date: number;
+  text?: string;
+  media?: {
+    type: 'photo' | 'video' | 'document' | 'audio' | 'sticker';
+    file_id?: string;
+    caption?: string;
+  };
+  reply_to?: {
+    message_id: number;
+    text?: string;
+  };
+  forward_from?: {
+    user_id?: string;
+    chat_id?: string;
+    date: number;
+  };
+  edit_date?: number;
+}
+
+export interface TelegramUserProfile {
+  id: string;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  phone?: string;
+  bio?: string;
+  photo?: {
+    small_file_id: string;
+    big_file_id: string;
+    photo_url?: string;
+  };
+  is_verified?: boolean;
+  is_premium?: boolean;
+  status?: {
+    type: 'online' | 'offline' | 'recently' | 'within_week' | 'within_month' | 'long_time_ago';
+    last_seen?: number;
+  };
+}
+
+class TelegramDataFetcher {
+  private config: { api_id: number; api_hash: string };
+
+  constructor() {
+    const api_id = process.env.TELEGRAM_API_ID;
+    const api_hash = process.env.TELEGRAM_API_HASH;
+
+    if (!api_id || !api_hash) {
+      throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH must be set');
+    }
+
+    this.config = {
+      api_id: parseInt(api_id),
+      api_hash
+    };
+  }
+
+  private async createClient(sessionString: string): Promise<TelegramClient> {
+    const client = new TelegramClient(
+      new StringSession(sessionString),
+      this.config.api_id,
+      this.config.api_hash,
+      { connectionRetries: 5 }
+    );
+    
+    await client.connect();
+    return client;
+  }
+
+  // Get user profile information
+  async getUserProfile(sessionString: string): Promise<{
+    success: boolean;
+    profile?: TelegramUserProfile;
+    error?: string;
+  }> {
+    let client: TelegramClient | null = null;
+    
+    try {
+      client = await this.createClient(sessionString);
+      const me = await client.getMe();
+
+      if (!me || !('id' in me)) {
+        return { success: false, error: 'Failed to get user info' };
+      }
+
+      // Get full user info including bio
+      const fullUser = await client.invoke(
+        new Api.users.GetFullUser({ id: new Api.InputUserSelf() })
+      );
+
+      const profile: TelegramUserProfile = {
+        id: me.id.toString(),
+        first_name: (me as any).firstName || '',
+        last_name: (me as any).lastName || undefined,
+        username: (me as any).username || undefined,
+        phone: (me as any).phone || undefined,
+        bio: (fullUser.fullUser as any).about || undefined,
+        is_verified: (me as any).verified || false,
+        is_premium: (me as any).premium || false,
+        status: this.parseUserStatus((me as any).status)
+      };
+
+      // Get profile photo if available
+      if ((me as any).photo) {
+        profile.photo = await this.getProfilePhoto(client, me as any);
+      }
+
+      return { success: true, profile };
+    } catch (error: any) {
+      console.error('Error getting user profile:', error);
+      return { success: false, error: error.message || 'Failed to get profile' };
+    } finally {
+      if (client) {
+        await client.disconnect();
+      }
+    }
+  }
+
+  // Get all chats (private chats, groups, channels)
+  async getChats(sessionString: string, limit: number = 50): Promise<{
+    success: boolean;
+    chats?: TelegramChat[];
+    error?: string;
+  }> {
+    let client: TelegramClient | null = null;
+    
+    try {
+      client = await this.createClient(sessionString);
+      
+      // Get dialogs (conversations)
+      const dialogs = await client.getDialogs({ limit });
+      
+      const chats: TelegramChat[] = [];
+
+      for (const dialog of dialogs) {
+        const entity = dialog.entity;
+        const chat = await this.parseEntityToChat(entity, dialog);
+        if (chat) {
+          chats.push(chat);
+        }
+      }
+
+      return { success: true, chats };
+    } catch (error: any) {
+      console.error('Error getting chats:', error);
+      return { success: false, error: error.message || 'Failed to get chats' };
+    } finally {
+      if (client) {
+        await client.disconnect();
+      }
+    }
+  }
+
+  // Get messages from a specific chat
+  async getChatMessages(
+    sessionString: string, 
+    chatId: string, 
+    limit: number = 50
+  ): Promise<{
+    success: boolean;
+    messages?: TelegramMessage[];
+    error?: string;
+  }> {
+    let client: TelegramClient | null = null;
+    
+    try {
+      client = await this.createClient(sessionString);
+      
+      // Get the chat entity
+      const entity = await client.getEntity(chatId);
+      
+      // Get messages
+      const messages = await client.getMessages(entity, { limit });
+      
+      const telegramMessages: TelegramMessage[] = [];
+
+      for (const message of messages) {
+        if (message && typeof message === 'object' && 'id' in message) {
+          const tgMessage = await this.parseMessage(message as any);
+          if (tgMessage) {
+            telegramMessages.push(tgMessage);
+          }
+        }
+      }
+
+      return { success: true, messages: telegramMessages };
+    } catch (error: any) {
+      console.error('Error getting chat messages:', error);
+      return { success: false, error: error.message || 'Failed to get messages' };
+    } finally {
+      if (client) {
+        await client.disconnect();
+      }
+    }
+  }
+
+  // Get chat information
+  async getChatInfo(sessionString: string, chatId: string): Promise<{
+    success: boolean;
+    chat?: TelegramChat;
+    error?: string;
+  }> {
+    let client: TelegramClient | null = null;
+    
+    try {
+      client = await this.createClient(sessionString);
+      
+      const entity = await client.getEntity(chatId);
+      const chat = await this.parseEntityToChat(entity);
+      
+      if (!chat) {
+        return { success: false, error: 'Failed to parse chat info' };
+      }
+
+      return { success: true, chat };
+    } catch (error: any) {
+      console.error('Error getting chat info:', error);
+      return { success: false, error: error.message || 'Failed to get chat info' };
+    } finally {
+      if (client) {
+        await client.disconnect();
+      }
+    }
+  }
+
+  // Helper function to parse entity to chat
+  private async parseEntityToChat(entity: any, dialog?: any): Promise<TelegramChat | null> {
+    try {
+      if (!entity || !('id' in entity)) return null;
+
+      const chat: TelegramChat = {
+        id: entity.id.toString(),
+        type: this.getEntityType(entity),
+      };
+
+      // Handle different entity types
+      if (entity.className === 'User') {
+        chat.first_name = entity.firstName || '';
+        chat.last_name = entity.lastName || undefined;
+        chat.username = entity.username || undefined;
+        chat.is_verified = entity.verified || false;
+        chat.is_scam = entity.scam || false;
+        chat.is_fake = entity.fake || false;
+      } else if (entity.className === 'Chat' || entity.className === 'Channel') {
+        chat.title = entity.title || '';
+        chat.username = entity.username || undefined;
+        chat.description = entity.about || undefined;
+        chat.participant_count = entity.participantsCount || undefined;
+        chat.is_verified = entity.verified || false;
+        chat.is_scam = entity.scam || false;
+        chat.is_fake = entity.fake || false;
+      }
+
+      // Add dialog-specific info if available
+      if (dialog) {
+        chat.unread_count = dialog.unreadCount || 0;
+        
+        if (dialog.message && typeof dialog.message === 'object') {
+          chat.last_message = {
+            id: dialog.message.id || 0,
+            text: dialog.message.message || undefined,
+            date: dialog.message.date || 0,
+            from_user: dialog.message.fromId ? dialog.message.fromId.toString() : undefined
+          };
+        }
+      }
+
+      return chat;
+    } catch (error) {
+      console.error('Error parsing entity to chat:', error);
+      return null;
+    }
+  }
+
+  // Helper function to parse message
+  private async parseMessage(message: any): Promise<TelegramMessage | null> {
+    try {
+      if (!message || !('id' in message)) return null;
+
+      const tgMessage: TelegramMessage = {
+        id: message.id,
+        chat_id: message.peerId ? message.peerId.toString() : '',
+        date: message.date || 0,
+        text: message.message || undefined,
+        edit_date: message.editDate || undefined
+      };
+
+      // Add sender info
+      if (message.fromId) {
+        tgMessage.from_user = {
+          id: message.fromId.toString(),
+          first_name: '', // Would need to fetch user info separately
+          username: undefined
+        };
+      }
+
+      // Add media info
+      if (message.media) {
+        tgMessage.media = {
+          type: this.getMediaType(message.media),
+          caption: message.message || undefined
+        };
+      }
+
+      // Add reply info
+      if (message.replyTo && message.replyTo.replyToMsgId) {
+        tgMessage.reply_to = {
+          message_id: message.replyTo.replyToMsgId
+        };
+      }
+
+      return tgMessage;
+    } catch (error) {
+      console.error('Error parsing message:', error);
+      return null;
+    }
+  }
+
+  // Helper functions
+  private getEntityType(entity: any): 'private' | 'group' | 'supergroup' | 'channel' {
+    if (entity.className === 'User') return 'private';
+    if (entity.className === 'Chat') return 'group';
+    if (entity.className === 'Channel') {
+      return entity.broadcast ? 'channel' : 'supergroup';
+    }
+    return 'group';
+  }
+
+  private getMediaType(media: any): 'photo' | 'video' | 'document' | 'audio' | 'sticker' {
+    if (!media || !media.className) return 'document';
+    
+    const className = media.className.toLowerCase();
+    if (className.includes('photo')) return 'photo';
+    if (className.includes('video')) return 'video';
+    if (className.includes('audio')) return 'audio';
+    if (className.includes('sticker')) return 'sticker';
+    return 'document';
+  }
+
+  private parseUserStatus(status: any): TelegramUserProfile['status'] {
+    if (!status) return { type: 'offline' };
+
+    const className = status.className;
+    if (className === 'UserStatusOnline') {
+      return { type: 'online' };
+    } else if (className === 'UserStatusOffline') {
+      return { 
+        type: 'offline', 
+        last_seen: status.wasOnline || undefined 
+      };
+    } else if (className === 'UserStatusRecently') {
+      return { type: 'recently' };
+    } else if (className === 'UserStatusLastWeek') {
+      return { type: 'within_week' };
+    } else if (className === 'UserStatusLastMonth') {
+      return { type: 'within_month' };
+    }
+    
+    return { type: 'long_time_ago' };
+  }
+
+  private async getProfilePhoto(client: TelegramClient, user: any): Promise<{
+    small_file_id: string;
+    big_file_id: string;
+    photo_url?: string;
+  } | undefined> {
+    try {
+      if (!user.photo) return undefined;
+
+      // For now, return placeholder data
+      // In a real implementation, you'd download the photo or get a URL
+      return {
+        small_file_id: user.photo.photoId?.toString() || '',
+        big_file_id: user.photo.photoId?.toString() || '',
+        photo_url: undefined // Would need to implement photo download/URL generation
+      };
+    } catch (error) {
+      console.error('Error getting profile photo:', error);
+      return undefined;
+    }
+  }
+}
+
+// Export singleton instance
+export const telegramData = new TelegramDataFetcher();
 
 export class TelegramDataService {
   private authToken: string;

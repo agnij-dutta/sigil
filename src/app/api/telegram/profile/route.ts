@@ -37,24 +37,21 @@ export async function GET(request: NextRequest) {
 
     const sessionString = authData.telegram.sessionId;
 
-    const searchParams = request.nextUrl.searchParams;
-    const limit = parseInt(searchParams.get('limit') || '50');
-
-    const result = await telegramData.getChats(sessionString, limit);
+    const result = await telegramData.getUserProfile(sessionString);
 
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error || 'Failed to fetch chats' },
+        { error: result.error || 'Failed to fetch profile' },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      chats: result.chats
+      profile: result.profile
     });
   } catch (error: any) {
-    console.error('Error in telegram chats API:', error);
+    console.error('Error in telegram profile API:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

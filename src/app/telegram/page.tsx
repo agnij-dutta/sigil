@@ -1,23 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { TelegramChat, TelegramUserProfile } from '@/lib/telegram/data';
 import Link from 'next/link';
-
-interface TelegramChat {
-  id: number;
-  type: 'private' | 'group' | 'supergroup' | 'channel';
-  title?: string;
-  username?: string;
-  first_name?: string;
-  last_name?: string;
-  photo?: {
-    small_file_id: string;
-    big_file_id: string;
-  };
-  bio?: string;
-  description?: string;
-  participant_count?: number;
-}
 
 interface TelegramUser {
   id: number;
@@ -25,343 +10,303 @@ interface TelegramUser {
   last_name?: string;
   username?: string;
   phone_number?: string;
+  sessionString?: string;
 }
 
 export default function TelegramPage() {
+  const [profile, setProfile] = useState<TelegramUserProfile | null>(null);
   const [chats, setChats] = useState<TelegramChat[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<TelegramUser | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedType, setSelectedType] = useState<'all' | 'private' | 'group' | 'channel'>('all');
-  const [sortBy, setSortBy] = useState<'name' | 'type' | 'members'>('name');
 
   useEffect(() => {
-    checkAuthAndFetchData();
+    // Check authentication via API endpoint
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const authData = await response.json();
+          if (authData.telegram && authData.telegram.sessionId) {
+            setUser(authData.telegram.user);
+            await fetchData(authData.telegram.sessionId);
+          } else {
+            setError('Not authenticated with Telegram');
+            setLoading(false);
+          }
+        } else {
+          setError('Not authenticated with Telegram');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        setError('Authentication check failed');
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
-  const checkAuthAndFetchData = async () => {
+  const fetchData = async (sessionString: string) => {
     try {
-      // Check authentication status
-      const authResponse = await fetch('/api/auth/me');
-      if (!authResponse.ok) {
-        throw new Error('Not authenticated');
+      // Fetch profile and chats in parallel - JWT cookie will be automatically included
+      const [profileResponse, chatsResponse] = await Promise.all([
+        fetch('/api/telegram/profile', { 
+          method: 'GET',
+          credentials: 'include' // Ensure cookies are included
+        }),
+        fetch('/api/telegram/chats?limit=20', { 
+          method: 'GET',
+          credentials: 'include' // Ensure cookies are included
+        })
+      ]);
+
+      if (!profileResponse.ok || !chatsResponse.ok) {
+        throw new Error('Failed to fetch Telegram data');
       }
 
-      const authData = await authResponse.json();
-      if (!authData.telegram?.user) {
-        throw new Error('Telegram not connected');
+      const profileData = await profileResponse.json();
+      const chatsData = await chatsResponse.json();
+
+      if (profileData.success) {
+        setProfile(profileData.profile);
       }
 
-      setUser(authData.telegram.user);
-      await fetchChats();
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      setError(error instanceof Error ? error.message : 'Authentication failed');
-      setIsLoading(false);
-    }
-  };
-
-  const fetchChats = async () => {
-    try {
-      setIsLoading(true);
-      const params = new URLSearchParams({
-        type: selectedType,
-        ...(searchTerm && { search: searchTerm }),
-        limit: '100'
-      });
-
-      const response = await fetch(`/api/telegram/chats?${params}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch chats');
+      if (chatsData.success) {
+        setChats(chatsData.chats || []);
       }
-
-      const data = await response.json();
-      setChats(data.chats || []);
-      setError(null);
-    } catch (error) {
-      console.error('Error fetching chats:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch chats');
+    } catch (err: any) {
+      console.error('Error fetching Telegram data:', err);
+      setError(err.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      fetchChats();
+  const formatLastSeen = (status?: TelegramUserProfile['status']) => {
+    if (!status) return 'Unknown';
+    
+    switch (status.type) {
+      case 'online':
+        return 'Online';
+      case 'recently':
+        return 'Recently';
+      case 'within_week':
+        return 'Within a week';
+      case 'within_month':
+        return 'Within a month';
+      case 'long_time_ago':
+        return 'Long time ago';
+      case 'offline':
+        return status.last_seen 
+          ? `Last seen ${new Date(status.last_seen * 1000).toLocaleDateString()}`
+          : 'Offline';
+      default:
+        return 'Unknown';
     }
-  }, [selectedType, searchTerm]);
-
-  const getChatTitle = (chat: TelegramChat): string => {
-    if (chat.title) return chat.title;
-    if (chat.first_name) {
-      return chat.last_name ? `${chat.first_name} ${chat.last_name}` : chat.first_name;
-    }
-    return chat.username || `Chat ${chat.id}`;
   };
 
-  const getChatSubtitle = (chat: TelegramChat): string => {
+  const getChatDisplayName = (chat: TelegramChat) => {
     if (chat.type === 'private') {
-      return chat.username ? `@${chat.username}` : (chat.bio || 'Private chat');
+      return `${chat.first_name || ''} ${chat.last_name || ''}`.trim() || chat.username || 'Unknown';
     }
-    if (chat.type === 'channel') {
-      return `Channel • ${chat.participant_count?.toLocaleString() || 0} subscribers`;
-    }
-    if (chat.type === 'group' || chat.type === 'supergroup') {
-      return `${chat.type === 'supergroup' ? 'Supergroup' : 'Group'} • ${chat.participant_count?.toLocaleString() || 0} members`;
-    }
-    return chat.description || 'Chat';
+    return chat.title || chat.username || 'Unknown Chat';
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'private':
-        return (
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-          </svg>
-        );
-      case 'group':
-      case 'supergroup':
-        return (
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A2.999 2.999 0 0 0 17.1 7H16c-.8 0-1.5.5-1.8 1.2L12 14l-2.2-5.8C9.5 7.5 8.8 7 8 7H6.9c-1.3 0-2.4.84-2.86 2.37L1.5 16H4v6h4v-6h2v6h4v-6h2v6h4z"/>
-          </svg>
-        );
-      case 'channel':
-        return (
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
-          </svg>
-        );
-      default:
-        return null;
+  const getChatDescription = (chat: TelegramChat) => {
+    if (chat.type === 'private') {
+      return chat.username ? `@${chat.username}` : 'Private chat';
     }
+    
+    const typeMap = {
+      group: 'Group',
+      supergroup: 'Supergroup',
+      channel: 'Channel'
+    };
+    
+    let desc = typeMap[chat.type as keyof typeof typeMap] || 'Chat';
+    if (chat.participant_count) {
+      desc += ` • ${chat.participant_count.toLocaleString()} members`;
+    }
+    return desc;
   };
 
-  const sortedChats = [...chats].sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return getChatTitle(a).localeCompare(getChatTitle(b));
-      case 'type':
-        return a.type.localeCompare(b.type);
-      case 'members':
-        return (b.participant_count || 0) - (a.participant_count || 0);
-      default:
-        return 0;
-    }
-  });
+  const formatLastMessage = (chat: TelegramChat) => {
+    if (!chat.last_message) return 'No messages';
+    
+    const date = new Date(chat.last_message.date * 1000);
+    const text = chat.last_message.text || 'Media message';
+    const maxLength = 50;
+    const truncatedText = text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+    
+    return `${truncatedText} • ${date.toLocaleDateString()}`;
+  };
 
-  if (error && !user) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Telegram Integration</h1>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Go to Dashboard
-          </Link>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-300 rounded w-1/4 mb-8"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1">
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <div className="h-24 w-24 bg-gray-300 rounded-full mx-auto mb-4"></div>
+                  <div className="h-6 bg-gray-300 rounded w-3/4 mx-auto mb-2"></div>
+                  <div className="h-4 bg-gray-300 rounded w-1/2 mx-auto"></div>
+                </div>
+              </div>
+              <div className="lg:col-span-2">
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <div className="space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="flex items-center space-x-4">
+                        <div className="h-12 w-12 bg-gray-300 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-300 rounded w-1/4 mb-2"></div>
+                          <div className="h-3 bg-gray-300 rounded w-3/4"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+            <div className="text-red-500 text-xl mb-4">⚠️ Error</div>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <Link 
+              href="/dashboard" 
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              ← Back to Dashboard
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Telegram Chats</h1>
-              {user && (
-                <p className="text-gray-600 mt-1">
-                  Connected as {user.first_name} {user.last_name && user.last_name}
-                  {user.username && ` (@${user.username})`}
-                </p>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Telegram Integration</h1>
+            <p className="text-gray-600 mt-1">Manage your Telegram chats and messages</p>
+          </div>
+          <Link 
+            href="/dashboard" 
+            className="inline-flex items-center px-4 py-2 bg-white text-gray-700 rounded-lg shadow-sm hover:bg-gray-50 transition-colors"
+          >
+            ← Dashboard
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Profile Section */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Profile</h2>
+              
+              {profile && (
+                <div className="text-center">
+                  {/* Profile Photo Placeholder */}
+                  <div className="w-24 h-24 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold">
+                    {profile.first_name.charAt(0)}
+                  </div>
+                  
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {profile.first_name} {profile.last_name}
+                    {profile.is_verified && <span className="text-blue-500 ml-1">✓</span>}
+                    {profile.is_premium && <span className="text-yellow-500 ml-1">⭐</span>}
+                  </h3>
+                  
+                  {profile.username && (
+                    <p className="text-gray-600">@{profile.username}</p>
+                  )}
+                  
+                  <div className="mt-4 space-y-2 text-sm text-gray-600">
+                    <p><strong>Status:</strong> {formatLastSeen(profile.status)}</p>
+                    {profile.phone && <p><strong>Phone:</strong> {profile.phone}</p>}
+                    {profile.bio && (
+                      <div>
+                        <strong>Bio:</strong>
+                        <p className="mt-1 text-gray-700">{profile.bio}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center px-4 py-2 text-gray-600 hover:text-gray-900"
-            >
-              ← Back to Dashboard
-            </Link>
           </div>
-        </div>
 
-        {/* Filters and Search */}
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Search */}
-            <div>
-              <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
-                Search Chats
-              </label>
-              <input
-                type="text"
-                id="search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by name, username, or description..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Type Filter */}
-            <div>
-              <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-2">
-                Chat Type
-              </label>
-              <select
-                id="type"
-                value={selectedType}
-                onChange={(e) => setSelectedType(e.target.value as 'all' | 'private' | 'group' | 'channel')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Types</option>
-                <option value="private">Private Chats</option>
-                <option value="group">Groups</option>
-                <option value="channel">Channels</option>
-              </select>
-            </div>
-
-            {/* Sort */}
-            <div>
-              <label htmlFor="sort" className="block text-sm font-medium text-gray-700 mb-2">
-                Sort By
-              </label>
-              <select
-                id="sort"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'name' | 'type' | 'members')}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="name">Name</option>
-                <option value="type">Type</option>
-                <option value="members">Member Count</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Total Chats</h3>
-            <p className="text-2xl font-bold text-gray-900">{chats.length}</p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Private Chats</h3>
-            <p className="text-2xl font-bold text-blue-600">
-              {chats.filter(c => c.type === 'private').length}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Groups</h3>
-            <p className="text-2xl font-bold text-green-600">
-              {chats.filter(c => c.type === 'group' || c.type === 'supergroup').length}
-            </p>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500">Channels</h3>
-            <p className="text-2xl font-bold text-purple-600">
-              {chats.filter(c => c.type === 'channel').length}
-            </p>
-          </div>
-        </div>
-
-        {/* Chats List */}
-        {isLoading ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading chats...</p>
-          </div>
-        ) : error ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-red-600 mb-4">{error}</p>
-            <button
-              onClick={fetchChats}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Retry
-            </button>
-          </div>
-        ) : sortedChats.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <p className="text-gray-600">
-              {searchTerm || selectedType !== 'all' 
-                ? 'No chats match your filters' 
-                : 'No chats found'}
-            </p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="divide-y divide-gray-200">
-              {sortedChats.map((chat) => (
-                <Link
-                  key={chat.id}
-                  href={`/telegram/chat/${chat.id}`}
-                  className="block hover:bg-gray-50 transition-colors"
-                >
-                  <div className="px-6 py-4">
-                    <div className="flex items-center justify-between">
+          {/* Chats Section */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Recent Chats</h2>
+                <span className="text-sm text-gray-500">{chats.length} chats</span>
+              </div>
+              
+              {chats.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">No chats found</p>
+              ) : (
+                <div className="space-y-3">
+                  {chats.map((chat) => (
+                    <Link
+                      key={chat.id}
+                      href={`/telegram/chat/${chat.id}`}
+                      className="block p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    >
                       <div className="flex items-center space-x-4">
-                        <div className="flex-shrink-0">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold">
-                            {getChatTitle(chat).charAt(0).toUpperCase()}
-                          </div>
+                        {/* Chat Avatar */}
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center text-white font-semibold">
+                          {getChatDisplayName(chat).charAt(0).toUpperCase()}
                         </div>
+                        
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2">
-                            {getTypeIcon(chat.type)}
-                            <h3 className="text-lg font-medium text-gray-900 truncate">
-                              {getChatTitle(chat)}
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-medium text-gray-900 truncate">
+                              {getChatDisplayName(chat)}
+                              {chat.is_verified && <span className="text-blue-500 ml-1">✓</span>}
+                              {chat.is_scam && <span className="text-red-500 ml-1">⚠️</span>}
                             </h3>
-                            <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                              chat.type === 'private' ? 'bg-blue-100 text-blue-800' :
-                              chat.type === 'channel' ? 'bg-purple-100 text-purple-800' :
-                              'bg-green-100 text-green-800'
-                            }`}>
-                              {chat.type}
-                            </span>
+                            {chat.unread_count && chat.unread_count > 0 && (
+                              <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                                {chat.unread_count}
+                              </span>
+                            )}
                           </div>
+                          
                           <p className="text-sm text-gray-600 truncate">
-                            {getChatSubtitle(chat)}
+                            {getChatDescription(chat)}
                           </p>
-                          {chat.description && (
-                            <p className="text-xs text-gray-500 mt-1 truncate">
-                              {chat.description}
-                            </p>
-                          )}
+                          
+                          <p className="text-xs text-gray-500 mt-1 truncate">
+                            {formatLastMessage(chat)}
+                          </p>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-4">
-                        {chat.participant_count !== undefined && (
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-gray-900">
-                              {chat.participant_count.toLocaleString()}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {chat.type === 'channel' ? 'subscribers' : 'members'}
-                            </p>
-                          </div>
-                        )}
-                        <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface TelegramUser {
   id: number;
@@ -33,6 +33,26 @@ export default function TelegramAuthButton({
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const [user, setUser] = useState<TelegramUser | null>(null);
+
+  useEffect(() => {
+    // Check for existing authentication via API
+    const checkExistingAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const authData = await response.json();
+          if (authData.telegram && authData.telegram.user) {
+            setUser(authData.telegram.user);
+            setStep('success');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check existing auth:', error);
+      }
+    };
+
+    checkExistingAuth();
+  }, []);
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage);
@@ -144,6 +164,10 @@ export default function TelegramAuthButton({
       if (data.success && data.user && data.sessionString) {
         setUser(data.user);
         setStep('success');
+        
+        // Validate session with server to set JWT cookie
+        await validateSession(data.sessionString);
+        
         onSuccess?.(data.user, data.sessionString);
       } else {
         handleError('Failed to verify code');
@@ -186,6 +210,10 @@ export default function TelegramAuthButton({
       if (data.success && data.user && data.sessionString) {
         setUser(data.user);
         setStep('success');
+        
+        // Validate session with server to set JWT cookie
+        await validateSession(data.sessionString);
+        
         onSuccess?.(data.user, data.sessionString);
       } else {
         handleError('Failed to verify password');
@@ -197,7 +225,47 @@ export default function TelegramAuthButton({
     }
   };
 
-  const resetAuth = () => {
+  const validateSession = async (sessionString: string) => {
+    try {
+      const response = await fetch('/api/telegram/auth/validate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionString }),
+      });
+
+      const data = await response.json();
+      
+      if (data.valid && data.user) {
+        setUser(data.user);
+        setStep('success');
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error) {
+      console.error('Failed to validate session:', error);
+      return false;
+    }
+  };
+
+  const resetAuth = async () => {
+    // Logout from Telegram if authenticated
+    if (step === 'success') {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ provider: 'telegram' }),
+        });
+      } catch (error) {
+        console.error('Failed to logout:', error);
+      }
+    }
+    
     setStep('start');
     setSessionId('');
     setPhoneNumber('');
@@ -247,9 +315,9 @@ export default function TelegramAuthButton({
         </div>
         <button 
           onClick={resetAuth}
-          className="mt-2 text-sm text-blue-500 hover:text-blue-700"
+          className="mt-2 text-sm text-red-500 hover:text-red-700"
         >
-          Connect different account
+          Disconnect
         </button>
       </div>
     );

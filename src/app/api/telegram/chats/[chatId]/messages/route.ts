@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
-import { TelegramDataService } from '@/lib/telegram/data';
+import { AuthToken } from '@/types/auth';
+import { telegramData } from '@/lib/telegram/data';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ chatId: string }> }
+  { params }: { params: { chatId: string } }
 ) {
-  const resolvedParams = await params;
   try {
-    // Verify authentication
+    // Get authentication from JWT cookie
     const authCookie = request.cookies.get('tipdao_auth')?.value;
+    
     if (!authCookie) {
       return NextResponse.json(
         { error: 'Not authenticated' },
@@ -17,68 +18,49 @@ export async function GET(
       );
     }
 
-    const decoded = jwt.verify(
-      authCookie,
-      process.env.JWT_SECRET || 'fallback-secret'
-    ) as { telegram?: { user: { id: number } } };
+    let authData: AuthToken;
+    try {
+      authData = jwt.verify(
+        authCookie,
+        process.env.JWT_SECRET || 'fallback-secret'
+      ) as AuthToken;
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid authentication' },
+        { status: 401 }
+      );
+    }
 
-    if (!decoded.telegram?.user) {
+    if (!authData.telegram?.sessionId) {
       return NextResponse.json(
         { error: 'Telegram not connected' },
         { status: 401 }
       );
     }
 
-    const chatId = parseInt(resolvedParams.chatId);
-    if (isNaN(chatId)) {
+    const sessionString = authData.telegram.sessionId;
+
+    const searchParams = request.nextUrl.searchParams;
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const chatId = params.chatId;
+
+    const result = await telegramData.getChatMessages(sessionString, chatId, limit);
+
+    if (!result.success) {
       return NextResponse.json(
-        { error: 'Invalid chat ID' },
-        { status: 400 }
+        { error: result.error || 'Failed to fetch messages' },
+        { status: 500 }
       );
     }
 
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const filter = searchParams.get('filter') as 'text' | 'media' | 'documents' | 'all' || 'all';
-    const search = searchParams.get('search') || undefined;
-    const limit = parseInt(searchParams.get('limit') || '100');
-    const offset = parseInt(searchParams.get('offset') || '0');
-    const dateFrom = searchParams.get('date_from') ? new Date(searchParams.get('date_from')!) : undefined;
-    const dateTo = searchParams.get('date_to') ? new Date(searchParams.get('date_to')!) : undefined;
-
-    // Initialize Telegram data service
-    const telegramData = new TelegramDataService('mock_token', decoded.telegram.user.id);
-
-    // Fetch messages
-    const messages = await telegramData.getChatMessages(chatId, {
-      filter,
-      search,
-      limit,
-      offset,
-      date_from: dateFrom,
-      date_to: dateTo
-    });
-
     return NextResponse.json({
-      messages,
-      chatId,
-      pagination: {
-        limit,
-        offset,
-        total: messages.length, // In real implementation, this would be the total count
-        hasMore: messages.length === limit
-      },
-      filters: {
-        filter,
-        search,
-        date_from: dateFrom?.toISOString(),
-        date_to: dateTo?.toISOString()
-      }
+      success: true,
+      messages: result.messages
     });
-  } catch (error) {
-    console.error('Error fetching Telegram messages:', error);
+  } catch (error: any) {
+    console.error('Error in telegram chat messages API:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch messages' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
