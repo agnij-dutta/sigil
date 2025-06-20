@@ -10,12 +10,17 @@
   },
   "dependencies": {
     "@civic/auth": "^0.8.0",
+    "@civic/auth-web3": "^0.6.0",
     "@octokit/auth-oauth-app": "^7.0.1",
+    "autoprefixer": "^10.4.21",
     "axios": "^1.6.8",
     "bcryptjs": "^2.4.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "jose": "^5.2.3",
     "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.518.0",
     "next": "15.3.3",
     "next-auth": "^4.24.7",
     "octokit": "^3.1.2",
@@ -23,6 +28,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "supports-color": "^10.0.0",
+    "tailwind-merge": "^3.3.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
