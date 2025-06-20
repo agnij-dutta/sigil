@@ -4,7 +4,7 @@ import { AuthToken } from '@/types/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    const authCookie = request.cookies.get('tipdao_auth')?.value;
+    const authCookie = request.cookies.get('sigil_auth')?.value;
     
     if (!authCookie) {
       return NextResponse.json(

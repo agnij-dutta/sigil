@@ -20,7 +20,7 @@ export default function CivicAuthButton({
       // Placeholder for future Web3 wallet integration
       setTimeout(() => {
         setIsLoading(false);
-        onError?.(new Error('Web3 wallet integration coming soon! Please use GitHub or Telegram authentication for now.'));
+        onError?.(new Error('Web3 wallet integration coming soon! Please use GitHub authentication for now.'));
       }, 1000);
     } catch (error) {
       console.error('Auth error:', error);

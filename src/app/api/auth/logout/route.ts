@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
     const { provider } = await request.json();
     
     // Get current auth data from cookie
-    const authCookie = request.cookies.get('tipdao_auth')?.value;
+    const authCookie = request.cookies.get('sigil_auth')?.value;
     let currentAuth: AuthToken = {};
     
     if (authCookie) {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         );
         
         const response = NextResponse.json({ success: true, provider });
-        response.cookies.set('tipdao_auth', newJwtToken, {
+        response.cookies.set('sigil_auth', newJwtToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'lax',
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     
     // If no provider specified or no auth data remaining, clear the cookie
     const response = NextResponse.json({ success: true, provider: provider || 'all' });
-    response.cookies.delete('tipdao_auth');
+    response.cookies.delete('sigil_auth');
     
     return response;
   } catch (error) {

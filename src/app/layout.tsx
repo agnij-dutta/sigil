@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TipDAO - Connect & Collaborate",
+  title: "Sigil - Connect & Collaborate",
   description: "A platform for meaningful connections and collaborative work",
 };
 

@@ -1,12 +1,32 @@
-# Sigil
+# Sigil - Connect & Collaborate
 
-Web3-native hiring passport for developers that enables them to generate verifiable, privacy-preserving proofs of their real GitHub contributions.
+A Web3-native hiring passport for developers that enables them to generate verifiable, privacy-preserving proofs of their real GitHub contributions. A modern platform for meaningful connections and collaborative work, built with Next.js.
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Overview
+
+Sigil helps developers discover and connect with others who share their interests, collaborate on projects, and build lasting professional relationships. The platform focuses on human-centered design and meaningful connections.
+
+## Features
+
+- **GitHub Integration**: Connect your GitHub account to discover repositories, track contributions, and find collaborators
+- **Web3 Identity**: Secure, decentralized authentication using wallet-based identity (coming soon)
+- **Repository Collaboration**: Access issues, pull requests, and contribution tracking
+- **Meaningful Connections**: Build professional relationships through shared interests and projects
 
 ## Getting Started
 
-First, run the development server:
+First, copy the environment variables:
+
+```bash
+cp env.example .env.local
+```
+
+Configure your environment variables in `.env.local`:
+- `CIVIC_CLIENT_ID` and `CIVIC_CLIENT_SECRET`: For Web3 authentication
+- `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`: For GitHub OAuth
+- `JWT_SECRET`: For session management
+
+Then, run the development server:
 
 ```bash
 npm run dev
@@ -20,7 +40,16 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
+
+- **Framework**: Next.js 15 with App Router
+- **Authentication**: Civic Auth for Web3, GitHub OAuth
+- **Styling**: Tailwind CSS
+- **TypeScript**: Full type safety
+
+## Development
+
+The main application code is in `src/app/page.tsx`. The page auto-updates as you edit files.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 

@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
     );
     
     // Set authentication cookie
-    response.cookies.set('tipdao_auth', jwtToken, {
+    response.cookies.set('sigil_auth', jwtToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
