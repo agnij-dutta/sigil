@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 export function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -57,12 +58,12 @@ export function Navigation() {
               >
                 How It Works
               </button>
-              <button
-                onClick={() => scrollToSection("cta")}
+              <Link
+                href="/dashboard"
                 className="bg-primary text-primary-foreground px-4 py-2 rounded-md hover:bg-primary/90 transition-colors duration-200"
               >
-                Get Started
-              </button>
+                Dashboard
+              </Link>
             </div>
           </div>
         </div>

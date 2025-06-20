@@ -5,6 +5,7 @@ import { CommitsGrid } from "@/components/ui/commits-grid"
 import { Feature } from "@/components/ui/feature-section-with-bento-grid"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Code, Check, Sparkles } from "lucide-react"
+import Link from "next/link"
 
 export default function Home() {
   return (
@@ -34,14 +35,20 @@ export default function Home() {
               </div>
               
               <div className="flex flex-col sm:flex-row gap-4">
-                <button className="bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 transition-colors duration-200 flex items-center gap-2 font-medium">
+                <Link 
+                  href="/dashboard"
+                  className="bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 transition-colors duration-200 flex items-center justify-center gap-2 font-medium"
+                >
                   Start Building Credentials
                   <ArrowRight className="w-4 h-4" />
-                </button>
-                <button className="border border-border px-8 py-4 rounded-lg hover:bg-muted transition-colors duration-200 flex items-center gap-2 font-medium">
+                </Link>
+                <Link 
+                  href="/github"
+                  className="border border-border px-8 py-4 rounded-lg hover:bg-muted transition-colors duration-200 flex items-center justify-center gap-2 font-medium"
+                >
                   <Code className="w-4 h-4" />
                   View Demo
-                </button>
+                </Link>
               </div>
               
               <div className="flex items-center gap-8 text-sm text-muted-foreground">
@@ -142,13 +149,19 @@ export default function Home() {
             </div>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button className="bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 transition-colors duration-200 flex items-center gap-2 font-medium">
+              <Link 
+                href="/dashboard"
+                className="bg-primary text-primary-foreground px-8 py-4 rounded-lg hover:bg-primary/90 transition-colors duration-200 flex items-center justify-center gap-2 font-medium"
+              >
                 Get Started Free
                 <ArrowRight className="w-4 h-4" />
-              </button>
-              <button className="border border-border px-8 py-4 rounded-lg hover:bg-muted transition-colors duration-200 font-medium">
-                Contact Sales
-              </button>
+              </Link>
+              <Link 
+                href="/github"
+                className="border border-border px-8 py-4 rounded-lg hover:bg-muted transition-colors duration-200 font-medium flex items-center justify-center"
+              >
+                View Repositories
+              </Link>
             </div>
           </div>
         </div>
