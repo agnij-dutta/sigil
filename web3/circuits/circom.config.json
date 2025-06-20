@@ -1,0 +1,84 @@
+{
+  "compiler": {
+    "version": "2.1.6",
+    "include_paths": [
+      "node_modules/circomlib/circuits",
+      "./src"
+    ],
+    "output_dir": "./build",
+    "wasm": true,
+    "r1cs": true,
+    "sym": true,
+    "json": true
+  },
+  "circuits": {
+    "contribution_proof": {
+      "file": "./src/contribution_proof.circom",
+      "template": "ContributionProof",
+      "output": "contribution_proof",
+      "prime": "bn128",
+      "verbose": true
+    },
+    "signature_verifier": {
+      "file": "./src/signature_verifier.circom", 
+      "template": "SignatureVerifier",
+      "output": "signature_verifier",
+      "prime": "bn128",
+      "verbose": false
+    },
+    "metadata_range": {
+      "file": "./src/metadata_range.circom",
+      "template": "MetadataRangeCheck", 
+      "output": "metadata_range",
+      "prime": "bn128",
+      "verbose": false
+    }
+  },
+  "proving_scheme": {
+    "type": "groth16",
+    "curve": "bn128",
+    "ceremony": {
+      "powers_of_tau": 20,
+      "max_constraints": 1048576
+    }
+  },
+  "optimization": {
+    "O": 2,
+    "reduce_constraints": true,
+    "simplification_rounds": 3
+  },
+  "environment": {
+    "nodejs": {
+      "version": ">=16.0.0"
+    },
+    "memory_limit": "8GB",
+    "timeout": 300
+  },
+  "testing": {
+    "input_dir": "./inputs",
+    "test_vectors": [
+      "sample_input.json"
+    ],
+    "expected_constraints": {
+      "contribution_proof": 500000,
+      "signature_verifier": 100000,
+      "metadata_range": 1000
+    }
+  },
+  "deployment": {
+    "verifier_contract": {
+      "solidity_version": "0.8.19",
+      "output_dir": "../contracts/src/generated"
+    },
+    "proving_key": {
+      "trusted_setup": true,
+      "ceremony_file": "./ceremony/powersOfTau28_hez_final_20.ptau"
+    }
+  },
+  "development": {
+    "watch": false,
+    "auto_compile": false,
+    "debug": true,
+    "constraint_tracking": true
+  }
+} 

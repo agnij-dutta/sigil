@@ -1,0 +1,31 @@
+# Compiled circuit artifacts
+*.r1cs
+*.wasm
+*.zkey
+*.sym
+*.json
+*.sol
+
+# Powers of Tau ceremony files
+ceremony/
+*.ptau
+
+# Temporary files
+*.tmp
+*.log
+
+# Generated verification keys
+*_verification_key.json
+
+# Generated Solidity verifier contracts
+*_verifier.sol
+
+# Generated witness files
+*.wtns
+
+# Build artifacts from snarkjs
+witness/
+proof/
+
+# Node modules if installed locally
+node_modules/ 
