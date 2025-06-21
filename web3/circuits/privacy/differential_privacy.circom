@@ -61,24 +61,9 @@ template NoiseCalibrationCheck(precision) {
 }
 
 /*
- * KAnonymity ensures group size is at least k for privacy
+ * Note: KAnonymity is now implemented in ../privacy/k_anonymity.circom
+ * Include that file to use advanced k-anonymity features
  */
-template KAnonymity(maxGroupSize) {
-    signal input groupSize;
-    signal input k; // Minimum group size for anonymity
-    signal output isKAnonymous;
-    
-    component gtCheck = GreaterThan(8);
-    gtCheck.in[0] <== groupSize;
-    gtCheck.in[1] <== k - 1; // groupSize >= k
-    isKAnonymous <== gtCheck.out;
-    
-    // Additional check: group size is reasonable
-    component maxCheck = LessThan(16);
-    maxCheck.in[0] <== groupSize;
-    maxCheck.in[1] <== maxGroupSize;
-    maxCheck.out === 1;
-}
 
 /*
  * ComposedPrivacy handles composition of multiple DP queries
