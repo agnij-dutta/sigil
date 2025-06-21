@@ -63,6 +63,40 @@ contract SigilCredentialVerifier is ISigilVerifier {
         uint256[] calldata publicSignals,
         uint256 expiresAt
     ) external override whenNotPaused returns (bytes32 credentialHash) {
+        return _verifySingleCredentialInternal(credentialType, proof, publicSignals, expiresAt);
+    }
+
+    function batchVerifyCredentials(
+        CredentialType[] calldata types,
+        bytes[] calldata proofs,
+        uint256[][] calldata publicSignals,
+        uint256[] calldata expirationTimes
+    ) external override whenNotPaused returns (bytes32[] memory credentialHashes) {
+        require(types.length == proofs.length, "Array length mismatch");
+        require(proofs.length == publicSignals.length, "Array length mismatch");
+        require(publicSignals.length == expirationTimes.length, "Array length mismatch");
+
+        credentialHashes = new bytes32[](types.length);
+
+        for (uint256 i = 0; i < types.length; i++) {
+            // Call internal verification function directly
+            credentialHashes[i] = _verifySingleCredentialInternal(
+                types[i],
+                proofs[i],
+                publicSignals[i],
+                expirationTimes[i]
+            );
+        }
+
+        return credentialHashes;
+    }
+
+    function _verifySingleCredentialInternal(
+        CredentialType credentialType,
+        bytes calldata proof,
+        uint256[] calldata publicSignals,
+        uint256 expiresAt
+    ) internal returns (bytes32 credentialHash) {
         require(block.timestamp <= expiresAt, "Credential expired");
 
         bool isValid = false;
@@ -95,11 +129,14 @@ contract SigilCredentialVerifier is ISigilVerifier {
 
         if (!isValid) revert InvalidProof();
 
+        // Include additional entropy for uniqueness
         credentialHash = keccak256(abi.encodePacked(
             msg.sender,
             block.timestamp,
+            block.number,
             credentialType,
-            publicSignals
+            publicSignals,
+            gasleft() // Additional entropy for uniqueness
         ));
 
         verifiedCredentials[msg.sender][credentialHash] = true;
@@ -116,30 +153,6 @@ contract SigilCredentialVerifier is ISigilVerifier {
         emit CredentialVerified(msg.sender, credentialHash, credentialType, block.timestamp);
         
         return credentialHash;
-    }
-
-    function batchVerifyCredentials(
-        CredentialType[] calldata types,
-        bytes[] calldata proofs,
-        uint256[][] calldata publicSignals,
-        uint256[] calldata expirationTimes
-    ) external override whenNotPaused returns (bytes32[] memory credentialHashes) {
-        require(types.length == proofs.length, "Array length mismatch");
-        require(proofs.length == publicSignals.length, "Array length mismatch");
-        require(publicSignals.length == expirationTimes.length, "Array length mismatch");
-
-        credentialHashes = new bytes32[](types.length);
-
-        for (uint256 i = 0; i < types.length; i++) {
-            credentialHashes[i] = this.verifySingleCredential(
-                types[i],
-                proofs[i],
-                publicSignals[i],
-                expirationTimes[i]
-            );
-        }
-
-        return credentialHashes;
     }
 
     function isCredentialValid(bytes32 credentialHash) external view override returns (bool) {

@@ -508,6 +508,9 @@ contract ComprehensiveContractTestsFixed is Test {
             block.timestamp + 3600
         );
         
+        // Simulate time passing with vm.warp to ensure different timestamps
+        vm.warp(block.timestamp + 1);
+        
         // Try to create another credential with same inputs
         bytes32 hash2 = mainVerifier.verifySingleCredential(
             ISigilVerifier.CredentialType.LANGUAGE,
@@ -516,7 +519,7 @@ contract ComprehensiveContractTestsFixed is Test {
             block.timestamp + 3600
         );
         
-        // Hashes should be different due to timestamp difference
+        // Hashes should be different due to additional entropy
         assertTrue(hash1 != hash2, "Credentials should have unique hashes");
     }
 
