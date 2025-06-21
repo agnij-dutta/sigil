@@ -21,6 +21,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+import ContributorsTable from '@/components/ui/ruixen-contributors-table';
 import { AuthToken } from '@/types/auth';
 
 export default function Dashboard() {
@@ -334,7 +335,7 @@ export default function Dashboard() {
 
         {/* Repositories Section */}
         {isAuthenticated && hasWallet && githubData && (
-          <div className="bg-card rounded-xl shadow-lg p-6 border mb-8">
+          <div className="mb-8">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold text-foreground">Your Repositories</h2>
               <button
@@ -351,37 +352,8 @@ export default function Dashboard() {
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                 <p className="text-muted-foreground">Loading repositories...</p>
               </div>
-            ) : repositories.length > 0 ? (
-              <div className="grid gap-4">
-                {repositories.map((repo, index) => (
-                  <div key={index} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-medium text-foreground">{repo.name}</h3>
-                        <p className="text-sm text-muted-foreground mt-1">{repo.description}</p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                          <span>★ {repo.stargazers_count}</span>
-                          <span>🍴 {repo.forks_count}</span>
-                          <span>{repo.language}</span>
-                        </div>
-                      </div>
-                      <Link
-                        href={`/github/${repo.owner.login}/${repo.name}`}
-                        className="text-sm bg-primary text-primary-foreground px-3 py-1 rounded hover:bg-primary/90 transition-colors"
-                      >
-                        View Details
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
             ) : (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">No collaborative repositories found.</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Make sure you have access to private repositories and are a collaborator on some projects.
-                </p>
-              </div>
+              <ContributorsTable githubRepositories={repositories} />
             )}
           </div>
         )}
