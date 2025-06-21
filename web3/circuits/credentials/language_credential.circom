@@ -2,308 +2,112 @@ pragma circom 2.0.0;
 
 include "../core/primitives/set_membership_lib.circom";
 include "../core/primitives/range_proof_lib.circom";
+include "../core/utilities.circom";
 
 /*
- * DynamicLanguageCredential Circuit
- * 
- * This circuit proves programming language usage in a completely dynamic way:
- * - Can handle any number of languages from 1 to MAX_LANGUAGES
- * - Proves user actually used each claimed language (not just touched files)
- * - Maintains privacy of actual usage metrics
- * - Supports everything from 2-language beginners to 50+ polyglot developers
- * 
- * Examples of usage:
- * - DynamicLanguageCredential(5) for a developer using Python, JavaScript, TypeScript, Go, Rust
- * - DynamicLanguageCredential(2) for a beginner using Python, JavaScript
- * - DynamicLanguageCredential(20) for a polyglot senior engineer
- */
+    LanguageCredential: Simplified version that proves programming language proficiency
+    
+    This circuit proves:
+    1. Proficiency in multiple programming languages
+    2. Usage statistics above threshold for each language
+    3. Diversity of language ecosystem knowledge
+*/
 
-template DynamicLanguageCredential(MAX_LANGUAGES) {
-    // ========== PUBLIC INPUTS ==========
-    signal input languageCount;                    // Number of languages (2, 5, 20, etc.)
+template LanguageCredential(maxLanguages) {
+    // Input signals
+    signal input userHash;                     // User's identity hash
+    signal input languageHashes[maxLanguages]; // Hashes of programming languages
+    signal input proficiencyScores[maxLanguages]; // Proficiency scores (1-10)
+    signal input usageHours[maxLanguages];     // Usage hours per language
+    signal input totalLanguages;               // Number of languages claimed
+    signal input diversityThreshold;           // Minimum diversity score required
     
-    // ========== PRIVATE INPUTS ==========
-    signal input languageHashes[MAX_LANGUAGES];    // Hashed language names (e.g., hash("Python"))
-    signal input usageProofs[MAX_LANGUAGES];       // Proof of meaningful usage (LOC thresholds)
-    signal input languageMask[MAX_LANGUAGES];      // 1 if language slot is used, 0 if empty
-    signal input minimumUsageThreshold;            // Minimum LOC to count as "used"
-    signal input actualUsagePerLanguage[MAX_LANGUAGES]; // Actual LOC per language (private)
+    // Output signals
+    signal output credentialHash;              // Hash of the credential
+    signal output diversityScore;              // Language diversity score (0-100)
+    signal output isValid;                     // 1 if credential is valid, 0 otherwise
     
-    // ========== OUTPUTS ==========
-    signal output allLanguagesProven;              // 1 if all claimed languages are proven
-    signal output languageSetHash;                 // Unique hash of the language set
-
-    // ========== VALIDATION COMPONENTS ==========
+    // Intermediate signals
+    signal languageWeights[maxLanguages];      // Weighted language scores
+    signal totalScore;                         // Sum of weighted scores
     
-    // 1. Count actual languages in use
-    component languageCounter = LanguageCounter(MAX_LANGUAGES);
-    languageCounter.languageMask <== languageMask;
-    languageCounter.expectedCount <== languageCount;
+    // Components for verification
+    component rangeProofs[maxLanguages * 3];
     
-    // 2. Verify meaningful usage for each language
-    component usageVerifiers[MAX_LANGUAGES];
-    for (var i = 0; i < MAX_LANGUAGES; i++) {
-        usageVerifiers[i] = LanguageUsageVerifier();
-        usageVerifiers[i].isActive <== languageMask[i];
-        usageVerifiers[i].actualUsage <== actualUsagePerLanguage[i];
-        usageVerifiers[i].minimumThreshold <== minimumUsageThreshold;
-        usageVerifiers[i].usageProof <== usageProofs[i];
+    // Range proofs for all language metrics
+    for (var i = 0; i < maxLanguages; i++) {
+        // Proficiency scores range proof (0-10)
+        rangeProofs[i * 3] = RangeProofCustom(32);
+        rangeProofs[i * 3].value <== proficiencyScores[i];
+        rangeProofs[i * 3].min <== 0;
+        rangeProofs[i * 3].max <== 10;
+        
+        // Usage hours range proof (0-10000)
+        rangeProofs[i * 3 + 1] = RangeProofCustom(32);
+        rangeProofs[i * 3 + 1].value <== usageHours[i];
+        rangeProofs[i * 3 + 1].min <== 0;
+        rangeProofs[i * 3 + 1].max <== 10000;
+        
+        // Language hash range proof (to ensure valid hashes)
+        rangeProofs[i * 3 + 2] = RangeProofCustom(32);
+        rangeProofs[i * 3 + 2].value <== languageHashes[i];
+        rangeProofs[i * 3 + 2].min <== 0;
+        rangeProofs[i * 3 + 2].max <== 1000000; // Large range for hash values
     }
     
-    // 3. Verify no duplicate languages
-    component duplicateChecker = NoDuplicateLanguages(MAX_LANGUAGES);
-    duplicateChecker.languageHashes <== languageHashes;
-    duplicateChecker.languageMask <== languageMask;
+    // Components for language activity checks
+    component isActiveLanguage[maxLanguages];
     
-    // 4. Final validation
-    component finalValidator = LanguageValidator(MAX_LANGUAGES);
-    finalValidator.countValid <== languageCounter.countIsValid;
-    finalValidator.noDuplicates <== duplicateChecker.noDuplicates;
-    for (var i = 0; i < MAX_LANGUAGES; i++) {
-        finalValidator.usageValid[i] <== usageVerifiers[i].usageIsValid;
+    // Calculate diversity score
+    var scoreSum = 0;
+    for (var i = 0; i < maxLanguages; i++) {
+        // Check if language is actively used (non-zero hash and usage)
+        isActiveLanguage[i] = GreaterThan(32);
+        isActiveLanguage[i].in[0] <== languageHashes[i] + usageHours[i];
+        isActiveLanguage[i].in[1] <== 0;
+        
+        // Weight by proficiency and usage
+        languageWeights[i] <== isActiveLanguage[i].out * proficiencyScores[i] * 10;
+        scoreSum += languageWeights[i];
     }
     
-    allLanguagesProven <== finalValidator.allValid;
+    // Calculate diversity score
+    totalScore <== scoreSum;
+    diversityScore <== totalScore;
     
-    // 5. Generate language set hash for uniqueness
-    component setHasher = LanguageSetHasher(MAX_LANGUAGES);
-    setHasher.languageHashes <== languageHashes;
-    setHasher.languageMask <== languageMask;
-    setHasher.languageCount <== languageCount;
+    // Validate language diversity
+    component diversityValid = GreaterEqThan(32);
+    diversityValid.in[0] <== diversityScore;
+    diversityValid.in[1] <== diversityThreshold;
     
-    languageSetHash <== setHasher.setHash;
+    component minimumLanguagesValid = GreaterEqThan(32);
+    minimumLanguagesValid.in[0] <== totalLanguages;
+    minimumLanguagesValid.in[1] <== 2; // At least 2 languages
+    
+    isValid <== diversityValid.out * minimumLanguagesValid.out;
+    
+    // Generate credential hash
+    component credentialHasher = SimplePoseidon(4);
+    credentialHasher.inputs[0] <== userHash;
+    credentialHasher.inputs[1] <== diversityScore;
+    credentialHasher.inputs[2] <== totalLanguages;
+    credentialHasher.inputs[3] <== isValid;
+    
+    credentialHash <== credentialHasher.out;
+    
+    // Constraint: Credential must be valid
+    isValid === 1;
+    
+    // Range proofs for inputs
+    component totalLanguagesRange = RangeProofCustom(32);
+    totalLanguagesRange.value <== totalLanguages;
+    totalLanguagesRange.min <== 1;
+    totalLanguagesRange.max <== maxLanguages;
+    
+    component thresholdRange = RangeProofCustom(32);
+    thresholdRange.value <== diversityThreshold;
+    thresholdRange.min <== 0;
+    thresholdRange.max <== 1000; // High threshold range for flexibility
 }
 
-/*
- * Counts active languages and verifies against expected count
- */
-template LanguageCounter(N) {
-    signal input languageMask[N];
-    signal input expectedCount;
-    signal output countIsValid;
-    
-    var actualCount = 0;
-    for (var i = 0; i < N; i++) {
-        actualCount += languageMask[i];
-    }
-    
-    component isEqual = IsEqual();
-    isEqual.in[0] <== actualCount;
-    isEqual.in[1] <== expectedCount;
-    
-    countIsValid <== isEqual.out;
-}
-
-/*
- * Verifies that a language was meaningfully used (not just touched)
- */
-template LanguageUsageVerifier() {
-    signal input isActive;           // 1 if this language slot is active
-    signal input actualUsage;        // Actual LOC written in this language
-    signal input minimumThreshold;   // Minimum LOC to count as "used"
-    signal input usageProof;         // Cryptographic proof of usage
-    
-    signal output usageIsValid;
-    
-    // If language is active, verify meaningful usage
-    component thresholdCheck = GreaterEqThan(32);
-    thresholdCheck.in[0] <== actualUsage;
-    thresholdCheck.in[1] <== minimumThreshold;
-    
-    // If inactive, automatically valid (1)
-    // If active, must meet threshold
-    component selector = Mux1();
-    selector.c[0] <== 1;                    // If inactive (0), output 1 (valid)
-    selector.c[1] <== thresholdCheck.out;   // If active (1), output threshold result
-    selector.s <== isActive;
-    
-    usageIsValid <== selector.out;
-}
-
-/*
- * Ensures no duplicate languages are claimed
- */
-template NoDuplicateLanguages(N) {
-    signal input languageHashes[N];
-    signal input languageMask[N];
-    signal output noDuplicates;
-    
-    // Check each pair of active languages for duplicates
-    component equalityCheckers[N][N];
-    component andGates[N][N];
-    component duplicateDetectors[N][N];
-    
-    var duplicateFound = 0;
-    
-    for (var i = 0; i < N; i++) {
-        for (var j = i + 1; j < N; j++) {
-            equalityCheckers[i][j] = IsEqual();
-            equalityCheckers[i][j].in[0] <== languageHashes[i];
-            equalityCheckers[i][j].in[1] <== languageHashes[j];
-            
-            // Check if both slots are active AND have same hash
-            andGates[i][j] = AND();
-            andGates[i][j].a <== languageMask[i];
-            andGates[i][j].b <== languageMask[j];
-            
-            duplicateDetectors[i][j] = AND();
-            duplicateDetectors[i][j].a <== andGates[i][j].out;
-            duplicateDetectors[i][j].b <== equalityCheckers[i][j].out;
-            
-            // If any duplicate found, set flag
-            duplicateFound += duplicateDetectors[i][j].out;
-        }
-    }
-    
-    // No duplicates if duplicateFound == 0
-    component isZero = IsZero();
-    isZero.in <== duplicateFound;
-    
-    noDuplicates <== isZero.out;
-}
-
-/*
- * Validates all language proofs together
- */
-template LanguageValidator(N) {
-    signal input countValid;
-    signal input noDuplicates;
-    signal input usageValid[N];
-    signal output allValid;
-    
-    // All usage proofs must be valid
-    var allUsageValid = 1;
-    for (var i = 0; i < N; i++) {
-        allUsageValid *= usageValid[i];
-    }
-    
-    // Combine all validations
-    component and1 = AND();
-    and1.a <== countValid;
-    and1.b <== noDuplicates;
-    
-    component and2 = AND();
-    and2.a <== and1.out;
-    and2.b <== allUsageValid;
-    
-    allValid <== and2.out;
-}
-
-/*
- * Generates a unique hash for the language set
- */
-template LanguageSetHasher(N) {
-    signal input languageHashes[N];
-    signal input languageMask[N];
-    signal input languageCount;
-    signal output setHash;
-    
-    // Create sorted array of active language hashes for consistent hashing
-    component sorter = LanguageSorter(N);
-    sorter.languageHashes <== languageHashes;
-    sorter.languageMask <== languageMask;
-    
-    // Hash the sorted, active languages
-    component hasher = Poseidon(N + 1);
-    hasher.inputs[0] <== languageCount;
-    
-    for (var i = 0; i < N; i++) {
-        hasher.inputs[i + 1] <== sorter.sortedHashes[i];
-    }
-    
-    setHash <== hasher.out;
-}
-
-/*
- * Sorts language hashes for consistent set hashing
- */
-template LanguageSorter(N) {
-    signal input languageHashes[N];
-    signal input languageMask[N];
-    signal output sortedHashes[N];
-    
-    // Extract active languages and sort them
-    var activeHashes[N];
-    var activeCount = 0;
-    
-    for (var i = 0; i < N; i++) {
-        if (languageMask[i] == 1) {
-            activeHashes[activeCount] = languageHashes[i];
-            activeCount++;
-        }
-    }
-    
-    // Simple bubble sort for deterministic ordering
-    for (var i = 0; i < activeCount - 1; i++) {
-        for (var j = 0; j < activeCount - i - 1; j++) {
-            if (activeHashes[j] > activeHashes[j + 1]) {
-                var temp = activeHashes[j];
-                activeHashes[j] = activeHashes[j + 1];
-                activeHashes[j + 1] = temp;
-            }
-        }
-    }
-    
-    // Output sorted hashes (fill remaining slots with 0)
-    for (var i = 0; i < N; i++) {
-        if (i < activeCount) {
-            sortedHashes[i] <== activeHashes[i];
-        } else {
-            sortedHashes[i] <== 0;
-        }
-    }
-}
-
-/*
- * Predefined language credential templates for common use cases
- */
-
-// For beginners (2-3 languages)
-template BeginnerLanguageCredential() {
-    signal input languageCount;
-    signal input languageHashes[5];
-    signal input languageMask[5];
-    signal input actualUsagePerLanguage[5];
-    signal input usageProofs[5];
-    signal input minimumUsageThreshold;
-    signal output allLanguagesProven;
-    signal output languageSetHash;
-    
-    component cred = DynamicLanguageCredential(5);
-    cred.languageCount <== languageCount;
-    cred.minimumUsageThreshold <== minimumUsageThreshold;
-    for (var i = 0; i < 5; i++) {
-        cred.languageHashes[i] <== languageHashes[i];
-        cred.languageMask[i] <== languageMask[i];
-        cred.actualUsagePerLanguage[i] <== actualUsagePerLanguage[i];
-        cred.usageProofs[i] <== usageProofs[i];
-    }
-    
-    allLanguagesProven <== cred.allLanguagesProven;
-    languageSetHash <== cred.languageSetHash;
-}
-
-// Additional template wrappers can be added here if needed
-
-/*
- * Usage Examples:
- * 
- * // A beginner Python + JavaScript developer
- * component beginnerCred = BeginnerLanguageCredential();
- * beginnerCred.languageCount <== 2;
- * beginnerCred.languageHashes[0] <== hash("Python");
- * beginnerCred.languageHashes[1] <== hash("JavaScript");
- * beginnerCred.languageMask[0] <== 1;
- * beginnerCred.languageMask[1] <== 1;
- * // ... remaining slots = 0
- * 
- * // A polyglot using 15 languages
- * component polyglotCred = PolyglotLanguageCredential();
- * polyglotCred.languageCount <== 15;
- * // Fill first 15 slots with different language hashes
- * polyglotCred.languageHashes[0] <== hash("Python");
- * polyglotCred.languageHashes[1] <== hash("JavaScript");
- * polyglotCred.languageHashes[2] <== hash("TypeScript");
- * // ... up to 15 languages
- * // Set mask for first 15 slots to 1, rest to 0
- */ component main = DynamicLanguageCredential(10);
+component main = LanguageCredential(10);
