@@ -1,6 +1,7 @@
 'use client';
 
 import CivicAuthButton from '@/components/auth/CivicAuthButton';
+import GitHubAuthButton from '@/components/auth/GitHubAuthButton';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useWallet } from '../../../web3/wallet/hooks/useWallet';
@@ -19,6 +20,7 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react';
+import { AuthToken } from '@/types/auth';
 
 export default function Dashboard() {
   const { 
@@ -34,14 +36,39 @@ export default function Dashboard() {
 
   const [repositories, setRepositories] = useState<any[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
+  const [githubData, setGithubData] = useState<AuthToken['github'] | null>(null);
+  const [loadingGithub, setLoadingGithub] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && hasWallet) {
-      fetchRepositories();
+      fetchGithubAuth();
     }
   }, [isAuthenticated, hasWallet]);
 
+  useEffect(() => {
+    if (githubData) {
+      fetchRepositories();
+    }
+  }, [githubData]);
+
+  const fetchGithubAuth = async () => {
+    try {
+      setLoadingGithub(true);
+      const response = await fetch('/api/auth/me');
+      if (response.ok) {
+        const data = await response.json();
+        setGithubData(data.github);
+      }
+    } catch (error) {
+      console.error('Failed to fetch GitHub auth:', error);
+    } finally {
+      setLoadingGithub(false);
+    }
+  };
+
   const fetchRepositories = async () => {
+    if (!githubData) return;
+    
     try {
       setLoadingRepos(true);
       const response = await fetch('/api/github/collaborative-repositories');
@@ -60,8 +87,30 @@ export default function Dashboard() {
     try {
       await signOut();
       setRepositories([]);
+      setGithubData(null);
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleGithubAuthSuccess = () => {
+    fetchGithubAuth();
+  };
+
+  const handleGithubLogout = async () => {
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'github' }),
+      });
+
+      if (response.ok) {
+        setGithubData(null);
+        setRepositories([]);
+      }
+    } catch (error) {
+      console.error('GitHub logout failed:', error);
     }
   };
 
@@ -112,23 +161,81 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Connected Account Overview */}
+        {/* Step 1: Civic Auth - Connect Identity & Wallet */}
+        {!isAuthenticated && (
+          <div className="bg-card rounded-xl shadow-lg p-8 border text-center mb-8">
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <span className="text-2xl font-bold text-primary">1</span>
+              </div>
+              <h3 className="text-xl font-semibold text-foreground mb-4">
+                Step 1: Connect Your Identity
+              </h3>
+              <p className="text-muted-foreground mb-6">
+                Sign in with Civic to create your Web3 identity and wallet. 
+                This will be your secure foundation for verifiable credentials.
+              </p>
+              <CivicAuthButton 
+                className="w-full"
+                onError={(error) => console.error('Auth error:', error)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: GitHub Auth - Connect Code Repositories */}
+        {isAuthenticated && hasWallet && !githubData && (
+          <div className="bg-card rounded-xl shadow-lg p-8 border text-center mb-8">
+            <div className="max-w-md mx-auto">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <span className="text-2xl font-bold text-blue-600">2</span>
+              </div>
+              <h3 className="text-xl font-semibold text-foreground mb-4">
+                Step 2: Connect Your GitHub
+              </h3>
+              <p className="text-muted-foreground mb-6">
+                Connect your GitHub account to access your repositories and generate 
+                verifiable proofs of your contributions.
+              </p>
+              {loadingGithub ? (
+                <div className="flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
+                  <span>Checking GitHub connection...</span>
+                </div>
+              ) : (
+                <GitHubAuthButton 
+                  className="w-full"
+                  onSuccess={handleGithubAuthSuccess}
+                  onError={(error) => console.error('GitHub auth error:', error)}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Connected Accounts Overview */}
         {isAuthenticated && (
           <div className="bg-card rounded-xl shadow-lg p-6 border mb-8">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Connected Account</h2>
+              <h2 className="text-xl font-semibold text-foreground">Connected Accounts</h2>
               <button
                 onClick={handleLogout}
                 className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded transition-colors"
               >
-                Logout
+                Logout All
               </button>
             </div>
             
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* User Profile */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Civic Profile */}
               <div className="space-y-3">
-                <h3 className="font-medium text-foreground">Profile</h3>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <span className="text-purple-600 font-bold text-sm">1</span>
+                  </div>
+                  <h3 className="font-medium text-foreground">Civic Identity</h3>
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Connected</span>
+                </div>
                 <div className="flex items-center space-x-3 p-3 bg-muted rounded-lg">
                   {user?.picture && (
                     <img 
@@ -146,19 +253,23 @@ export default function Dashboard() {
 
               {/* Wallet Status */}
               <div className="space-y-3">
-                <h3 className="font-medium text-foreground">Wallet</h3>
-                <div className="p-3 bg-muted rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium">Status:</span>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      hasWallet ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {hasWallet ? 'Connected' : 'Not Connected'}
-                    </span>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                    </svg>
                   </div>
-                  {hasWallet && (
-                    <>
-                      <div className="text-xs text-muted-foreground mb-1">
+                  <h3 className="font-medium text-foreground">Wallet</h3>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    hasWallet ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {hasWallet ? 'Connected' : 'Not Connected'}
+                  </span>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  {hasWallet ? (
+                    <div className="space-y-2">
+                      <div className="text-xs text-muted-foreground">
                         <span className="font-medium">Address:</span> {formatWalletAddress(walletInfo.address)}
                       </div>
                       {walletInfo.balance && (
@@ -166,7 +277,51 @@ export default function Dashboard() {
                           <span className="font-medium">Balance:</span> {parseFloat(walletInfo.balance).toFixed(4)} ETH
                         </div>
                       )}
-                    </>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Wallet creation in progress...</div>
+                  )}
+                </div>
+              </div>
+
+              {/* GitHub Status */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-gray-600 font-bold text-sm">2</span>
+                  </div>
+                  <h3 className="font-medium text-foreground">GitHub</h3>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    githubData ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {githubData ? 'Connected' : 'Not Connected'}
+                  </span>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  {githubData ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <img 
+                          src={githubData.user.avatar_url} 
+                          alt={githubData.user.login}
+                          className="w-6 h-6 rounded-full"
+                        />
+                        <span className="text-sm font-medium">{githubData.user.login}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {githubData.user.public_repos} public repos • {githubData.user.followers} followers
+                      </div>
+                      <button
+                        onClick={handleGithubLogout}
+                        className="text-xs text-red-600 hover:text-red-800"
+                      >
+                        Disconnect GitHub
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Connect GitHub to access repositories
+                    </div>
                   )}
                 </div>
               </div>
@@ -174,32 +329,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Authentication Section */}
-        {!isAuthenticated && (
-          <div className="bg-card rounded-xl shadow-lg p-8 border text-center mb-8">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-primary" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">
-                Connect Your Identity
-              </h3>
-              <p className="text-muted-foreground mb-6">
-                Sign in with Civic to create verifiable credentials from your development work. 
-                Your wallet will be created automatically.
-              </p>
-              <CivicAuthButton 
-                className="w-full"
-                onError={(error) => console.error('Auth error:', error)}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Repositories Section */}
-        {isAuthenticated && hasWallet && (
+        {isAuthenticated && hasWallet && githubData && (
           <div className="bg-card rounded-xl shadow-lg p-6 border mb-8">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold text-foreground">Your Repositories</h2>
