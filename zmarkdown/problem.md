@@ -17,7 +17,7 @@ Sigil introduces a Web3-native, privacy-preserving solution for developer creden
 - **Wallet-Linked Identity:** Proofs are bound to the developer’s Ethereum wallet, creating a tamper-proof, portable identity that can be used across platforms.
 - **Recruiter Trust Layer:** Recruiters and hiring managers can instantly verify the authenticity of a candidate’s contributions via a simple, human-readable certificate and a trustless proof verifier UI.
 - **Privacy by Design:** All proofs are generated in a way that reveals only the necessary metadata (e.g., lines of code, file types, langauges used), never the code itself.
-- **Seamless Sharing:** Developers get a shareable portfolio page (e.g., `sigil.dev/<username>`) with verifiable credentials, making it easy to showcase their work.
+- **Seamless Sharing:** Developers get a downloadable certificate of verifiable credentials, making it easy to showcase their work.
 
 ## What Can People Use Sigil For?
 
