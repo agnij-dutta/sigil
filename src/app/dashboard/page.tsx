@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useWallet } from '../../../web3/wallet/hooks/useWallet';
 import { formatWalletAddress } from '../../../web3/utils/wallet';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   Github, 
   Wallet, 
@@ -19,7 +20,21 @@ import {
   ExternalLink,
   Plus,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Zap,
+  Star,
+  Eye,
+  Settings,
+  Bell,
+  Search,
+  Filter,
+  MoreVertical,
+  Code,
+  Activity,
+  Award,
+  Clock,
+  LogOut,
+  Unlink
 } from 'lucide-react';
 import ContributorsTable from '@/components/ui/ruixen-contributors-table';
 import { AuthToken } from '@/types/auth';
@@ -40,6 +55,7 @@ export default function Dashboard() {
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [githubData, setGithubData] = useState<AuthToken['github'] | null>(null);
   const [loadingGithub, setLoadingGithub] = useState(false);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAuthenticated && hasWallet) {
@@ -69,8 +85,6 @@ export default function Dashboard() {
   };
 
   const fetchRepositories = async () => {
-    if (!githubData) return;
-    
     try {
       setLoadingRepos(true);
       const response = await fetch('/api/github/collaborative-repositories');
@@ -85,326 +99,439 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await signOut();
-      setRepositories([]);
-      setGithubData(null);
-    } catch (error) {
-      console.error('Logout failed:', error);
-    }
-  };
-
   const handleGithubAuthSuccess = () => {
     fetchGithubAuth();
   };
 
-  const handleGithubLogout = async () => {
+  const handleGithubDisconnect = async () => {
     try {
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ provider: 'github' }),
       });
-
+      
       if (response.ok) {
         setGithubData(null);
         setRepositories([]);
       }
     } catch (error) {
-      console.error('GitHub logout failed:', error);
+      console.error('Failed to disconnect GitHub:', error);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleCivicLogout = async () => {
+    try {
+      await signOut();
+      setGithubData(null);
+      setRepositories([]);
+    } catch (error) {
+      console.error('Failed to logout from Civic:', error);
+    }
+  };
+
+  const generateProof = async (repoId: string) => {
+    try {
+      console.log('Generating proof for repository:', repoId);
+      // TODO: Implement proof generation
+    } catch (error) {
+      console.error('Failed to generate proof:', error);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-black">
       <Header />
-      <div className="py-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">
-              Sigil Dashboard
-            </h1>
-            <p className="text-muted-foreground">
-              Build verifiable credentials from your development work
-            </p>
+      
+      {/* Main Dashboard Layout */}
+      <div className="flex h-[calc(100vh-80px)]">
+        
+        {/* Sidebar - Connected Accounts */}
+        <div className="w-80 p-6 border-r border-white/10">
+          <div className="space-y-6">
+            
+            {/* Profile Header */}
+            <div className="glass-card p-6 rounded-2xl">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="relative">
+                  {githubData?.user?.avatar_url ? (
+                    <img 
+                      src={githubData.user.avatar_url} 
+                      alt={githubData.user.login}
+                      className="w-12 h-12 rounded-full border-2 border-purple-500/30"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg">
+                      {user?.given_name?.[0] || 'A'}
+                    </div>
+                  )}
+                  {isAuthenticated && (
+                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-black"></div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">Welcome back</h3>
+                  <p className="text-gray-400 text-sm">
+                    {githubData?.user?.name || user?.email || 'Developer'}
+                  </p>
+                  {githubData?.user?.login && (
+                    <p className="text-purple-400 text-xs">@{githubData.user.login}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+                  <Settings className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+                  <Bell className="w-4 h-4" />
+                </Button>
+                {isAuthenticated && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-gray-400 hover:text-red-400"
+                    onClick={handleCivicLogout}
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Connection Status */}
+            <div className="space-y-4">
+              <h4 className="text-white font-medium flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Connected Accounts
+              </h4>
+
+              {/* Civic Identity */}
+              <div className="glass-card p-4 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-medium">Civic Identity</p>
+                      <p className="text-gray-400 text-xs">Web3 Identity</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className={isAuthenticated ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-gray-500/20 text-gray-400 border-gray-500/30"}>
+                      {isAuthenticated ? 'Connected' : 'Disconnected'}
+                    </Badge>
+                    {isAuthenticated && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-400"
+                        onClick={handleCivicLogout}
+                      >
+                        <LogOut className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {!isAuthenticated && (
+                  <CivicAuthButton 
+                    className="w-full"
+                    onError={(error) => console.error('Auth error:', error)}
+                  />
+                )}
+              </div>
+
+              {/* Wallet */}
+              <div className="glass-card p-4 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                      <Wallet className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-medium">Wallet</p>
+                      <p className="text-gray-400 text-xs">
+                        {hasWallet ? formatWalletAddress(walletInfo.address) : 'Not connected'}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className={hasWallet ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-gray-500/20 text-gray-400 border-gray-500/30"}>
+                    {hasWallet ? 'Connected' : 'Disconnected'}
+                  </Badge>
+                </div>
+                {hasWallet && (
+                  <div className="text-xs text-gray-400">
+                    Balance: {walletInfo.balance || '0.0000'} ETH
+                  </div>
+                )}
+              </div>
+
+              {/* GitHub */}
+              <div className="glass-card p-4 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gray-500/20 flex items-center justify-center">
+                      <Github className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-medium">GitHub</p>
+                      <p className="text-gray-400 text-xs">
+                        {githubData ? `@${githubData.user.login}` : 'Not connected'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className={githubData ? "bg-green-500/20 text-green-400 border-green-500/30" : "bg-gray-500/20 text-gray-400 border-gray-500/30"}>
+                      {githubData ? 'Connected' : 'Disconnected'}
+                    </Badge>
+                    {githubData && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-gray-400 hover:text-red-400"
+                        onClick={handleGithubDisconnect}
+                      >
+                        <Unlink className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {!githubData && isAuthenticated && hasWallet && (
+                  <GitHubAuthButton 
+                    className="w-full"
+                    onSuccess={handleGithubAuthSuccess}
+                    onError={(error) => console.error('GitHub auth error:', error)}
+                  />
+                )}
+                {githubData && (
+                  <div className="text-xs text-gray-400">
+                    {repositories.length} repositories • {githubData.user.followers || 0} followers
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="space-y-3">
+              <h4 className="text-white font-medium flex items-center gap-2">
+                <Zap className="w-4 h-4" />
+                Quick Actions
+              </h4>
+              <div className="space-y-2">
+                <Button variant="ghost" className="w-full justify-start text-gray-400 hover:text-white hover:bg-white/5" asChild>
+                  <Link href="/proof/generate">
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    Generate Proof
+                  </Link>
+                </Button>
+                <Button variant="ghost" className="w-full justify-start text-gray-400 hover:text-white hover:bg-white/5" asChild>
+                  <Link href="/portfolio">
+                    <Award className="w-4 h-4 mr-2" />
+                    View Portfolio
+                  </Link>
+                </Button>
+                <Button variant="ghost" className="w-full justify-start text-gray-400 hover:text-white hover:bg-white/5" asChild>
+                  <Link href="/verify">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Verify Proof
+                  </Link>
+                </Button>
+                {githubData && (
+                  <Button variant="ghost" className="w-full justify-start text-gray-400 hover:text-white hover:bg-white/5" asChild>
+                    <Link href="/github">
+                      <Github className="w-4 h-4 mr-2" />
+                      GitHub Deep Dive
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
-          <Link 
-            href="/"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            ← Back to Home
-          </Link>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex justify-between items-center">
-              <p className="text-red-700">{error.message}</p>
-              <button
-                onClick={clearError}
-                className="text-red-500 hover:text-red-700"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 1: Civic Auth - Connect Identity & Wallet */}
-        {!isAuthenticated && (
-          <div className="bg-card rounded-xl shadow-lg p-8 border text-center mb-8">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-primary">1</span>
+        {/* Main Content */}
+        <div className="flex-1 p-6 overflow-auto">
+          <div className="max-w-7xl mx-auto space-y-6">
+            
+            {/* Dashboard Header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-white mb-2">Developer Dashboard</h1>
+                <p className="text-gray-400">Build verifiable credentials from your development work</p>
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">
-                Step 1: Connect Your Identity
-              </h3>
-              <p className="text-muted-foreground mb-6">
-                Sign in with Civic to create your Web3 identity and wallet. 
-                This will be your secure foundation for verifiable credentials.
-              </p>
-              <CivicAuthButton 
-                className="w-full"
-                onError={(error) => console.error('Auth error:', error)}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: GitHub Auth - Connect Code Repositories */}
-        {isAuthenticated && hasWallet && !githubData && (
-          <div className="bg-card rounded-xl shadow-lg p-8 border text-center mb-8">
-            <div className="max-w-md mx-auto">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-bold text-blue-600">2</span>
+              <div className="flex items-center gap-3">
+                <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                  <Search className="w-4 h-4 mr-2" />
+                  Search
+                </Button>
+                <Button className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Generate Proof
+                </Button>
               </div>
-              <h3 className="text-xl font-semibold text-foreground mb-4">
-                Step 2: Connect Your GitHub
-              </h3>
-              <p className="text-muted-foreground mb-6">
-                Connect your GitHub account to access your repositories and generate 
-                verifiable proofs of your contributions.
-              </p>
-              {loadingGithub ? (
-                <div className="flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2"></div>
-                  <span>Checking GitHub connection...</span>
+            </div>
+
+            {/* Stats Cards */}
+            {isAuthenticated && hasWallet && githubData && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="glass-card p-6 rounded-2xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Total Repositories</p>
+                      <p className="text-2xl font-bold text-white">{repositories.length}</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <GitBranch className="w-5 h-5 text-blue-400" />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center text-xs">
+                    <TrendingUp className="w-3 h-3 text-green-400 mr-1" />
+                    <span className="text-green-400">+12%</span>
+                    <span className="text-gray-400 ml-1">from last month</span>
+                  </div>
                 </div>
-              ) : (
-                <GitHubAuthButton 
-                  className="w-full"
-                  onSuccess={handleGithubAuthSuccess}
-                  onError={(error) => console.error('GitHub auth error:', error)}
+
+                <div className="glass-card p-6 rounded-2xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Languages Used</p>
+                      <p className="text-2xl font-bold text-white">
+                        {[...new Set(repositories.map(repo => repo.language).filter(Boolean))].length}
+                      </p>
+                    </div>
+                    <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                      <Code className="w-5 h-5 text-purple-400" />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center text-xs">
+                    <Activity className="w-3 h-3 text-purple-400 mr-1" />
+                    <span className="text-gray-400">JavaScript, TypeScript, Python...</span>
+                  </div>
+                </div>
+
+                <div className="glass-card p-6 rounded-2xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Generated Proofs</p>
+                      <p className="text-2xl font-bold text-white">0</p>
+                    </div>
+                    <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                      <Shield className="w-5 h-5 text-green-400" />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <Button variant="ghost" className="h-6 px-2 text-xs text-gray-400 hover:text-white" asChild>
+                      <Link href="/proof/generate">Generate first proof →</Link>
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="glass-card p-6 rounded-2xl">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-400 text-sm">Total Stars</p>
+                      <p className="text-2xl font-bold text-white">
+                        {repositories.reduce((total, repo) => total + (repo.stargazers_count || 0), 0)}
+                      </p>
+                    </div>
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                      <Star className="w-5 h-5 text-orange-400" />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center text-xs">
+                    <Clock className="w-3 h-3 text-orange-400 mr-1" />
+                    <span className="text-gray-400">Across {repositories.length} projects</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Setup Steps for Non-Authenticated Users */}
+            {!isAuthenticated && (
+              <div className="glass-card p-8 rounded-2xl text-center">
+                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Shield className="w-8 h-8 text-white" />
+                </div>
+                <h3 className="text-2xl font-bold text-white mb-4">Connect Your Identity</h3>
+                <p className="text-gray-400 mb-6 max-w-md mx-auto">
+                  Sign in with Civic to create your Web3 identity and wallet. This will be your secure foundation for verifiable credentials.
+                </p>
+                <CivicAuthButton 
+                  className="mx-auto"
+                  onError={(error) => console.error('Auth error:', error)}
                 />
-              )}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* Connected Accounts Overview */}
-        {isAuthenticated && (
-          <div className="bg-card rounded-xl shadow-lg p-6 border mb-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Connected Accounts</h2>
-              <button
-                onClick={handleLogout}
-                className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded transition-colors"
-              >
-                Logout All
-              </button>
-            </div>
-            
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Civic Profile */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-purple-600 font-bold text-sm">1</span>
-                  </div>
-                  <h3 className="font-medium text-foreground">Civic Identity</h3>
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Connected</span>
+            {isAuthenticated && hasWallet && !githubData && (
+              <div className="glass-card p-8 rounded-2xl text-center">
+                <div className="w-16 h-16 bg-gray-500/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Github className="w-8 h-8 text-gray-400" />
                 </div>
-                <div className="flex items-center space-x-3 p-3 bg-muted rounded-lg">
-                  {user?.picture && (
-                    <img 
-                      src={user.picture} 
-                      alt={user.name || 'User'} 
-                      className="w-10 h-10 rounded-full"
-                    />
-                  )}
+                <h3 className="text-2xl font-bold text-white mb-4">Connect Your GitHub</h3>
+                <p className="text-gray-400 mb-6 max-w-md mx-auto">
+                  Connect your GitHub account to access your repositories and generate verifiable proofs of your contributions.
+                </p>
+                {loadingGithub ? (
+                  <div className="flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mr-3"></div>
+                    <span className="text-gray-400">Checking GitHub connection...</span>
+                  </div>
+                ) : (
+                  <GitHubAuthButton 
+                    className="mx-auto"
+                    onSuccess={handleGithubAuthSuccess}
+                    onError={(error) => console.error('GitHub auth error:', error)}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Repository Projects Table */}
+            {isAuthenticated && hasWallet && githubData && (
+              <div className="glass-card p-6 rounded-2xl">
+                <div className="flex items-center justify-between mb-6">
                   <div>
-                    <p className="font-medium text-foreground">{user?.name || 'Anonymous User'}</p>
-                    <p className="text-sm text-muted-foreground">{user?.email}</p>
+                    <h2 className="text-xl font-bold text-white">Your Projects</h2>
+                    <p className="text-gray-400 text-sm">Manage and generate proofs for your repositories</p>
                   </div>
-                </div>
-              </div>
-
-              {/* Wallet Status */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                    </svg>
-                  </div>
-                  <h3 className="font-medium text-foreground">Wallet</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    hasWallet ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {hasWallet ? 'Connected' : 'Not Connected'}
-                  </span>
-                </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  {hasWallet ? (
-                    <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-medium">Address:</span> {formatWalletAddress(walletInfo.address)}
-                      </div>
-                      {walletInfo.balance && (
-                        <div className="text-xs text-muted-foreground">
-                          <span className="font-medium">Balance:</span> {parseFloat(walletInfo.balance).toFixed(4)} ETH
-                        </div>
+                  <div className="flex items-center gap-3">
+                    <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10">
+                      <Filter className="w-4 h-4 mr-2" />
+                      Filter
+                    </Button>
+                    <Button
+                      onClick={fetchRepositories}
+                      disabled={loadingRepos}
+                      variant="outline"
+                      size="sm"
+                      className="border-white/20 text-white hover:bg-white/10"
+                    >
+                      {loadingRepos ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      ) : (
+                        <Activity className="w-4 h-4 mr-2" />
                       )}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground">Wallet creation in progress...</div>
-                  )}
-                </div>
-              </div>
-
-              {/* GitHub Status */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                    <span className="text-gray-600 font-bold text-sm">2</span>
+                      Refresh
+                    </Button>
                   </div>
-                  <h3 className="font-medium text-foreground">GitHub</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    githubData ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {githubData ? 'Connected' : 'Not Connected'}
-                  </span>
                 </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  {githubData ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <img 
-                          src={githubData.user.avatar_url} 
-                          alt={githubData.user.login}
-                          className="w-6 h-6 rounded-full"
-                        />
-                        <span className="text-sm font-medium">{githubData.user.login}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {githubData.user.public_repos} public repos • {githubData.user.followers} followers
-                      </div>
-                      <button
-                        onClick={handleGithubLogout}
-                        className="text-xs text-red-600 hover:text-red-800"
-                      >
-                        Disconnect GitHub
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground">
-                      Connect GitHub to access repositories
-                    </div>
-                  )}
-                </div>
+                
+                <ContributorsTable repositories={repositories} loading={loadingRepos} />
+                
+                {!loadingRepos && repositories.length === 0 && (
+                  <div className="text-center py-12">
+                    <Github className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-white mb-2">No repositories found</h3>
+                    <p className="text-gray-400">We couldn't find any repositories in your GitHub account.</p>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Repositories Section */}
-        {isAuthenticated && hasWallet && githubData && (
-          <div className="mb-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-foreground">Your Repositories</h2>
-              <button
-                onClick={fetchRepositories}
-                disabled={loadingRepos}
-                className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                {loadingRepos ? 'Loading...' : 'Refresh'}
-              </button>
-            </div>
-            
-            {loadingRepos ? (
-              <div className="text-center py-8">
-                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Loading repositories...</p>
-              </div>
-            ) : (
-              <ContributorsTable githubRepositories={repositories} />
             )}
           </div>
-        )}
-
-        {/* Features Preview */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-card rounded-xl p-6 border">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Proof Generation</h3>
-            <p className="text-sm text-muted-foreground">
-              Generate zero-knowledge proofs of your contributions without revealing code
-            </p>
-            <div className="mt-4">
-              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Coming Soon</span>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl p-6 border">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Credential Storage</h3>
-            <p className="text-sm text-muted-foreground">
-              Store your verifiable credentials on IPFS with blockchain attestation
-            </p>
-            <div className="mt-4">
-              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Coming Soon</span>
-            </div>
-          </div>
-
-          <div className="bg-card rounded-xl p-6 border">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">Share & Verify</h3>
-            <p className="text-sm text-muted-foreground">
-              Share your credentials with employers and let them verify authenticity
-            </p>
-            <div className="mt-4">
-              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Coming Soon</span>
-            </div>
-          </div>
-        </div>
         </div>
       </div>
     </div>

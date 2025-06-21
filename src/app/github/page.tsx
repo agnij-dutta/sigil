@@ -3,6 +3,24 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Repository } from '@/lib/github/data';
+import { Header } from "@/components/ui/header";
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { 
+  Github, 
+  Star, 
+  GitBranch, 
+  AlertCircle, 
+  ExternalLink, 
+  ArrowLeft,
+  Filter,
+  Activity,
+  Calendar,
+  Users,
+  Code,
+  Eye,
+  Zap
+} from 'lucide-react';
 
 interface GitHubUser {
   id: number;
@@ -113,17 +131,21 @@ export default function GitHubRepositoriesPage() {
 
   if (error && !authData) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">GitHub Integration</h1>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md mx-auto">
-            <p className="text-red-700 mb-4">{error}</p>
-            <Link 
-              href="/dashboard"
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Go to Dashboard
-            </Link>
+      <div className="min-h-screen bg-black">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-white mb-4">GitHub Integration</h1>
+            <div className="glass-card p-6 max-w-md mx-auto rounded-2xl">
+              <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+              <p className="text-red-400 mb-4">{error}</p>
+              <Button asChild className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600">
+                <Link href="/dashboard">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Go to Dashboard
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -131,178 +153,281 @@ export default function GitHubRepositoriesPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center space-x-4">
-          {authData?.github && (
-            <img
-              src={authData.github.user.avatar_url}
-              alt={authData.github.user.login}
-              className="w-12 h-12 rounded-full border-2 border-gray-200"
-            />
-          )}
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {authData?.github?.user.name || authData?.github?.user.login}&apos;s Repositories
-            </h1>
-            <p className="text-gray-600">
-              {authData?.github?.user.public_repos} public repositories
-            </p>
+    <div className="min-h-screen bg-black">
+      <Header />
+      
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
+            {authData?.github && (
+              <img
+                src={authData.github.user.avatar_url}
+                alt={authData.github.user.login}
+                className="w-16 h-16 rounded-full border-2 border-purple-500/30"
+              />
+            )}
+            <div>
+              <h1 className="text-3xl font-bold text-white">
+                GitHub Deep Dive
+              </h1>
+              <p className="text-gray-400">
+                {authData?.github?.user.name || authData?.github?.user.login}&apos;s Repository Analytics
+              </p>
+              <p className="text-purple-400 text-sm">
+                {authData?.github?.user.public_repos} public repositories • {authData?.github?.user.followers || 0} followers
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <Button variant="outline" className="border-white/20 text-white hover:bg-white/10" asChild>
+              <Link href="/dashboard">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Link>
+            </Button>
           </div>
         </div>
-        
-        <div className="flex items-center space-x-4">
-          <Link
-            href="/dashboard"
-            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            ← Back to Dashboard
-          </Link>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div className="flex items-center space-x-4 mb-6">
-        <div className="flex items-center space-x-2">
-          <label className="text-sm font-medium text-gray-700">Type:</label>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as 'all' | 'owner' | 'member')}
-            className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All</option>
-            <option value="owner">Owner</option>
-            <option value="member">Member</option>
-          </select>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <label className="text-sm font-medium text-gray-700">Sort by:</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as 'updated' | 'created' | 'pushed' | 'full_name')}
-            className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="updated">Last updated</option>
-            <option value="created">Created</option>
-            <option value="pushed">Last pushed</option>
-            <option value="full_name">Name</option>
-          </select>
-        </div>
-      </div>
+        {/* Stats Overview */}
+        {authData?.github && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div className="glass-card p-6 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Total Repositories</p>
+                  <p className="text-2xl font-bold text-white">{repositories.length}</p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <GitBranch className="w-5 h-5 text-blue-400" />
+                </div>
+              </div>
+            </div>
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="text-center py-12">
-          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="mt-2 text-gray-600">Loading repositories...</p>
-        </div>
-      )}
+            <div className="glass-card p-6 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Total Stars</p>
+                  <p className="text-2xl font-bold text-white">
+                    {repositories.reduce((total, repo) => total + (repo.stargazers_count || 0), 0)}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-yellow-500/20 flex items-center justify-center">
+                  <Star className="w-5 h-5 text-yellow-400" />
+                </div>
+              </div>
+            </div>
 
-      {/* Error State */}
-      {error && authData && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <p className="text-red-700">{error}</p>
-        </div>
-      )}
+            <div className="glass-card p-6 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Languages</p>
+                  <p className="text-2xl font-bold text-white">
+                    {[...new Set(repositories.map(repo => repo.language).filter(Boolean))].length}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                  <Code className="w-5 h-5 text-purple-400" />
+                </div>
+              </div>
+            </div>
 
-      {/* Repository Grid */}
-      {!isLoading && repositories.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {repositories.map((repo) => (
-            <Link
-              key={repo.id}
-              href={`/github/${repo.owner.login}/${repo.name}`}
-              className="block bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-blue-600 hover:text-blue-800 truncate">
-                    {repo.name}
-                  </h3>
-                  {repo.description && (
-                    <p className="text-gray-600 text-sm mt-1 line-clamp-2">
-                      {repo.description}
-                    </p>
+            <div className="glass-card p-6 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Total Forks</p>
+                  <p className="text-2xl font-bold text-white">
+                    {repositories.reduce((total, repo) => total + (repo.forks_count || 0), 0)}
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                  <Users className="w-5 h-5 text-green-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="glass-card p-6 rounded-2xl mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">Repository Explorer</h2>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={fetchRepositories}
+                disabled={isLoading}
+                variant="outline"
+                size="sm"
+                className="border-white/20 text-white hover:bg-white/10"
+              >
+                {isLoading ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                ) : (
+                  <Activity className="w-4 h-4 mr-2" />
+                )}
+                Refresh
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-400">Type:</label>
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as 'all' | 'owner' | 'member')}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              >
+                <option value="all">All</option>
+                <option value="owner">Owner</option>
+                <option value="member">Member</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-400">Sort by:</label>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'updated' | 'created' | 'pushed' | 'full_name')}
+                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+              >
+                <option value="updated">Last updated</option>
+                <option value="created">Created</option>
+                <option value="pushed">Last pushed</option>
+                <option value="full_name">Name</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        {isLoading && (
+          <div className="text-center py-12">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading repositories...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && authData && (
+          <div className="glass-card p-6 rounded-2xl mb-6">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertCircle className="w-5 h-5" />
+              <p>{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Repository Grid */}
+        {!isLoading && repositories.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {repositories.map((repo) => (
+              <div
+                key={repo.id}
+                className="glass-card p-6 rounded-2xl hover:bg-white/10 transition-all duration-200 group"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-semibold text-white group-hover:text-purple-300 transition-colors truncate">
+                      {repo.name}
+                    </h3>
+                    {repo.description && (
+                      <p className="text-gray-400 text-sm mt-1 line-clamp-2">
+                        {repo.description}
+                      </p>
+                    )}
+                  </div>
+                  {repo.private && (
+                    <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 ml-2">
+                      Private
+                    </Badge>
                   )}
                 </div>
-                {repo.private && (
-                  <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                    Private
-                  </span>
-                )}
-              </div>
 
-              <div className="flex items-center space-x-4 text-sm text-gray-500 mb-3">
-                {repo.language && (
-                  <div className="flex items-center space-x-1">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: getLanguageColor(repo.language) }}
-                    ></div>
-                    <span>{repo.language}</span>
-                  </div>
-                )}
-                
-                {repo.stargazers_count > 0 && (
-                  <div className="flex items-center space-x-1">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    <span>{repo.stargazers_count}</span>
-                  </div>
-                )}
-                
-                {repo.forks_count > 0 && (
-                  <div className="flex items-center space-x-1">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414L2.586 8l3.707-3.707a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span>{repo.forks_count}</span>
-                  </div>
-                )}
-                
-                {repo.open_issues_count > 0 && (
-                  <div className="flex items-center space-x-1">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                    </svg>
-                    <span>{repo.open_issues_count}</span>
-                  </div>
-                )}
-              </div>
+                <div className="flex items-center space-x-4 text-sm text-gray-400 mb-4">
+                  {repo.language && (
+                    <div className="flex items-center space-x-1">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: getLanguageColor(repo.language) }}
+                      ></div>
+                      <span>{repo.language}</span>
+                    </div>
+                  )}
+                  
+                  {repo.stargazers_count > 0 && (
+                    <div className="flex items-center space-x-1">
+                      <Star className="w-4 h-4" />
+                      <span>{repo.stargazers_count}</span>
+                    </div>
+                  )}
+                  
+                  {repo.forks_count > 0 && (
+                    <div className="flex items-center space-x-1">
+                      <GitBranch className="w-4 h-4" />
+                      <span>{repo.forks_count}</span>
+                    </div>
+                  )}
+                  
+                  {repo.open_issues_count > 0 && (
+                    <div className="flex items-center space-x-1">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>{repo.open_issues_count}</span>
+                    </div>
+                  )}
+                </div>
 
-              <div className="text-xs text-gray-500">
-                Updated {formatDate(repo.updated_at)}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-xs text-gray-500">
+                    <Calendar className="w-3 h-3 mr-1" />
+                    Updated {formatDate(repo.updated_at)}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white" asChild>
+                      <Link href={`/github/${repo.owner.login}/${repo.name}`}>
+                        <Eye className="w-4 h-4" />
+                      </Link>
+                    </Button>
+                    
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-purple-400" asChild>
+                      <Link href="/proof/generate">
+                        <Zap className="w-4 h-4" />
+                      </Link>
+                    </Button>
+                    
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white" asChild>
+                      <Link href={repo.html_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-4 h-4" />
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </Link>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* Empty State */}
-      {!isLoading && repositories.length === 0 && !error && (
-        <div className="text-center py-12">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-2M4 13h2m13-8l-8 8-4-4"
-            />
-          </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No repositories found</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Try changing your filter settings or check your GitHub account.
-          </p>
-        </div>
-      )}
+        {/* Empty State */}
+        {!isLoading && repositories.length === 0 && !error && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Github className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-white mb-2">No repositories found</h3>
+            <p className="text-gray-400 mb-4">
+              Try changing your filter settings or check your GitHub account.
+            </p>
+            <Button variant="outline" className="border-white/20 text-white hover:bg-white/10" asChild>
+              <Link href="/dashboard">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 } 

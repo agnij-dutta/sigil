@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import { Eye, ExternalLink } from "lucide-react";
+import { Eye, ExternalLink, GitBranch, Star, Code, Clock, Users, MoreVertical, Zap } from "lucide-react";
 import Link from "next/link";
 
 type Contributor = {
@@ -49,311 +49,453 @@ type Project = {
   tech: string;
   createdAt: string;
   contributors: Contributor[];
+  stars?: number;
+  commits?: number;
+  lastUpdated?: string;
+  description?: string;
   owner?: string;
-  name?: string;
+  repoName?: string;
 };
 
-interface ContributorsTableProps {
-  data?: Project[];
-  githubRepositories?: any[];
+// GitHub Repository type from API
+interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  html_url: string;
+  language: string | null;
+  stargazers_count: number;
+  forks_count: number;
+  open_issues_count: number;
+  created_at: string;
+  updated_at: string;
+  pushed_at: string;
+  private: boolean;
+  owner: {
+    login: string;
+    avatar_url: string;
+    html_url: string;
+  };
 }
 
-const defaultData: Project[] = [
-  {
-    id: "1",
-    title: "ShadCN Clone",
-    repo: "https://github.com/ruixenui/ruixen-buttons",
-    status: "Active",
-    team: "UI Guild",
-    tech: "Next.js",
-    createdAt: "2024-06-01",
-    contributors: [
-      {
-        name: "Srinath G",
-        email: "srinath@example.com",
-        avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face",
-        role: "UI Lead",
-      },
-      {
-        name: "Kavya M",
-        email: "kavya@example.com",
-        avatar: "https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face",
-        role: "Designer",
-      },
-    ],
-  },
-  {
-    id: "2",
-    title: "RUIXEN Components",
-    repo: "https://github.com/ruixenui/ruixen-buttons",
-    status: "In Progress",
-    team: "Component Devs",
-    tech: "React",
-    createdAt: "2024-05-22",
-    contributors: [
-      {
-        name: "Arjun R",
-        email: "arjun@example.com",
-        avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
-        role: "Developer",
-      },
-      {
-        name: "Divya S",
-        email: "divya@example.com",
-        avatar: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face",
-        role: "QA",
-      },
-      {
-        name: "Nikhil V",
-        email: "nikhil@example.com",
-        avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face",
-        role: "UX",
-      },
-    ],
-  },
-  {
-    id: "3",
-    title: "CV Jobs Platform",
-    repo: "https://github.com/ruixenui/ruixen-buttons",
-    status: "Active",
-    team: "CV Core",
-    tech: "Spring Boot",
-    createdAt: "2024-06-05",
-    contributors: [
-      {
-        name: "Manoj T",
-        email: "manoj@example.com",
-        avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&h=150&fit=crop&crop=face",
-        role: "Backend Lead",
-      },
-    ],
-  },
-  {
-    id: "4",
-    title: "Ruixen UI Docs",
-    repo: "https://github.com/ruixenui/ruixen-buttons",
-    status: "Active",
-    team: "Tech Writers",
-    tech: "Markdown + Docusaurus",
-    createdAt: "2024-04-19",
-    contributors: [
-      {
-        name: "Sneha R",
-        email: "sneha@example.com",
-        avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop&crop=face",
-        role: "Documentation",
-      },
-      {
-        name: "Vinay K",
-        email: "vinay@example.com",
-        avatar: "https://images.unsplash.com/photo-1519244703995-f4e0f30006d5?w=150&h=150&fit=crop&crop=face",
-        role: "Maintainer",
-      },
-    ],
+interface ContributorsTableProps {
+  repositories?: GitHubRepo[];
+  loading?: boolean;
+}
+
+const statusColors = {
+  Active: "bg-green-500/20 text-green-400 border-green-500/30",
+  Inactive: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  "In Progress": "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+};
+
+const techColors = {
+  "Next.js": "bg-blue-500/20 text-blue-400",
+  "React": "bg-cyan-500/20 text-cyan-400",
+  "TypeScript": "bg-blue-600/20 text-blue-300",
+  "Python": "bg-green-600/20 text-green-300",
+  "Rust": "bg-orange-500/20 text-orange-400",
+  "JavaScript": "bg-yellow-500/20 text-yellow-300",
+  "Java": "bg-red-500/20 text-red-400",
+  "C++": "bg-pink-500/20 text-pink-400",
+  "Go": "bg-cyan-600/20 text-cyan-300",
+  "PHP": "bg-purple-500/20 text-purple-400",
+  "Ruby": "bg-red-600/20 text-red-300",
+  "Swift": "bg-orange-600/20 text-orange-300",
+  "Kotlin": "bg-purple-600/20 text-purple-300",
+  "Dart": "bg-blue-500/20 text-blue-400",
+  "C#": "bg-green-500/20 text-green-400",
+  "HTML": "bg-orange-500/20 text-orange-400",
+  "CSS": "bg-blue-400/20 text-blue-300",
+  "Shell": "bg-gray-500/20 text-gray-400",
+  "Vue": "bg-green-400/20 text-green-300",
+};
+
+// Transform GitHub repo data to Project format
+const transformGitHubRepo = (repo: GitHubRepo): Project => {
+  const daysSinceUpdate = Math.floor((Date.now() - new Date(repo.updated_at).getTime()) / (1000 * 60 * 60 * 24));
+  
+  let status: "Active" | "Inactive" | "In Progress" = "Active";
+  if (daysSinceUpdate > 30) {
+    status = "Inactive";
+  } else if (repo.open_issues_count > 5) {
+    status = "In Progress";
   }
-];
 
-const allColumns = [
-  "Project",
-  "Repository",
-  "Team",
-  "Tech",
-  "Created At",
-  "Contributors",
-  "Status",
-  "Actions",
-] as const;
+  return {
+    id: repo.id.toString(),
+    title: repo.name,
+    repo: repo.html_url,
+    status,
+    team: repo.private ? "Private Team" : "Public",
+    tech: repo.language || "Unknown",
+    createdAt: repo.created_at,
+    contributors: [
+      {
+        name: repo.owner.login,
+        email: `${repo.owner.login}@github.com`,
+        avatar: repo.owner.avatar_url,
+        role: "Owner",
+      }
+    ],
+    stars: repo.stargazers_count,
+    commits: repo.forks_count, // Using forks as a proxy for activity
+    lastUpdated: daysSinceUpdate === 0 ? "Today" : 
+                 daysSinceUpdate === 1 ? "1 day ago" : 
+                 daysSinceUpdate < 7 ? `${daysSinceUpdate} days ago` :
+                 daysSinceUpdate < 30 ? `${Math.floor(daysSinceUpdate / 7)} weeks ago` :
+                 `${Math.floor(daysSinceUpdate / 30)} months ago`,
+         description: repo.description || undefined,
+    owner: repo.owner.login,
+    repoName: repo.name,
+  };
+};
 
-function ContributorsTable({ data, githubRepositories }: ContributorsTableProps) {
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([...allColumns]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [techFilter, setTechFilter] = useState("");
-
-  // Convert GitHub repositories to our data format if provided
-  const processedData = githubRepositories ? githubRepositories.map((repo, index) => ({
-    id: repo.id?.toString() || index.toString(),
-    title: repo.name || 'Unknown Repository',
-    repo: repo.html_url || '#',
-    status: repo.private ? "Private" as const : "Active" as const,
-    team: repo.owner?.login || 'Unknown',
-    tech: repo.language || 'Unknown',
-    createdAt: repo.created_at ? new Date(repo.created_at).toLocaleDateString() : 'Unknown',
-    contributors: repo.collaborators || [{
-      name: repo.owner?.login || 'Unknown',
-      email: 'email@example.com',
-      avatar: repo.owner?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
-      role: 'Owner',
-    }],
-    owner: repo.owner?.login,
-    name: repo.name,
-  })) : (data || defaultData);
-
-  const filteredData = processedData.filter((project) => {
-    return (
-      (!statusFilter || project.status === statusFilter) &&
-      (!techFilter || project.tech.toLowerCase().includes(techFilter.toLowerCase()))
-    );
+export default function ContributorsTable({ repositories = [], loading = false }: ContributorsTableProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [visibleColumns, setVisibleColumns] = useState({
+    project: true,
+    repository: true,
+    team: true,
+    tech: true,
+    status: true,
+    contributors: true,
+    stats: true,
+    actions: true,
   });
 
-  const toggleColumn = (col: string) => {
-    setVisibleColumns((prev) =>
-      prev.includes(col)
-        ? prev.filter((c) => c !== col)
-        : [...prev, col]
-    );
+  // Transform GitHub repositories to Project format
+  const data = repositories.map(transformGitHubRepo);
+
+  const filteredData = data.filter(
+    (project) =>
+      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.tech.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.team.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const toggleColumn = (column: keyof typeof visibleColumns) => {
+    setVisibleColumns((prev) => ({ ...prev, [column]: !prev[column] }));
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center py-12">
+          <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading your repositories...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container my-10 space-y-4 p-6 border border-border rounded-lg bg-background shadow-sm overflow-x-auto">
-      <div className="flex flex-wrap gap-4 items-center justify-between mb-6">
-        <div className="flex gap-2 flex-wrap">
+    <div className="space-y-4 w-full">
+      {/* Search and Filters */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center space-x-3 w-full sm:w-auto">
           <Input
-            placeholder="Filter by technology..."
-            value={techFilter}
-            onChange={(e) => setTechFilter(e.target.value)}
-            className="w-48"
-          />
-          <Input
-            placeholder="Filter by status..."
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-48"
+            placeholder="Search projects..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full sm:w-64 bg-white/5 border-white/10 text-white placeholder:text-gray-400 focus:border-purple-500/50"
           />
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              Columns
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-48">
-            {allColumns.map((col) => (
-              <DropdownMenuCheckboxItem
-                key={col}
-                checked={visibleColumns.includes(col)}
-                onCheckedChange={() => toggleColumn(col)}
-              >
-                {col}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 text-xs sm:text-sm px-2 sm:px-3" asChild>
+            <Link href="/github">
+              <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden sm:inline">GitHub Deep Dive</span>
+            </Link>
+          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 text-xs sm:text-sm px-2 sm:px-3">
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-black/90 border-white/10 backdrop-blur-xl">
+              {Object.entries(visibleColumns).map(([key, value]) => (
+                <DropdownMenuCheckboxItem
+                  key={key}
+                  className="text-white hover:bg-white/10"
+                  checked={value}
+                  onCheckedChange={() => toggleColumn(key as keyof typeof visibleColumns)}
+                >
+                  {key.charAt(0).toUpperCase() + key.slice(1)}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      <Table className="w-full">
-        <TableHeader>
-          <TableRow>
-            {visibleColumns.includes("Project") && <TableHead className="w-[180px]">Project</TableHead>}
-            {visibleColumns.includes("Repository") && <TableHead className="w-[220px]">Repository</TableHead>}
-            {visibleColumns.includes("Team") && <TableHead className="w-[150px]">Team</TableHead>}
-            {visibleColumns.includes("Tech") && <TableHead className="w-[150px]">Tech</TableHead>}
-            {visibleColumns.includes("Created At") && <TableHead className="w-[120px]">Created At</TableHead>}
-            {visibleColumns.includes("Contributors") && <TableHead className="w-[150px]">Contributors</TableHead>}
-            {visibleColumns.includes("Status") && <TableHead className="w-[100px]">Status</TableHead>}
-            {visibleColumns.includes("Actions") && <TableHead className="w-[120px]">Actions</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filteredData.length ? (
-            filteredData.map((project) => (
-              <TableRow key={project.id}>
-                {visibleColumns.includes("Project") && (
-                  <TableCell className="font-medium whitespace-nowrap">{project.title}</TableCell>
+      {/* Table */}
+      <div className="glass-card rounded-xl overflow-hidden w-full">
+        <div className="overflow-x-auto">
+          <Table className="min-w-full">
+            <TableHeader>
+              <TableRow className="border-white/10 hover:bg-white/5">
+                {visibleColumns.project && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[200px] max-w-[300px]">Project</TableHead>
                 )}
-                {visibleColumns.includes("Repository") && (
-                  <TableCell className="whitespace-nowrap">
-                    <a
-                      href={project.repo}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-500 hover:text-blue-700 underline flex items-center gap-1"
-                    >
-                      {project.repo.replace("https://", "")}
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </TableCell>
+                {visibleColumns.repository && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[180px] max-w-[240px]">Repository</TableHead>
                 )}
-                {visibleColumns.includes("Team") && <TableCell className="whitespace-nowrap">{project.team}</TableCell>}
-                {visibleColumns.includes("Tech") && <TableCell className="whitespace-nowrap">{project.tech}</TableCell>}
-                {visibleColumns.includes("Created At") && <TableCell className="whitespace-nowrap">{project.createdAt}</TableCell>}
-                {visibleColumns.includes("Contributors") && (
-                  <TableCell className="min-w-[120px]">
-                    <div className="flex -space-x-2">
-                      <TooltipProvider>
-                                                 {project.contributors.slice(0, 3).map((contributor: Contributor, idx: number) => (
-                          <Tooltip key={idx}>
-                            <TooltipTrigger asChild>
-                              <Avatar className="h-8 w-8 ring-2 ring-white hover:z-10">
-                                <AvatarImage src={contributor.avatar} alt={contributor.name} />
-                                <AvatarFallback>{contributor.name[0]}</AvatarFallback>
-                              </Avatar>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-sm">
-                              <p className="font-semibold">{contributor.name}</p>
-                              <p className="text-xs text-muted-foreground">{contributor.email}</p>
-                              <p className="text-xs italic">{contributor.role}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                        {project.contributors.length > 3 && (
-                          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium ring-2 ring-white">
-                            +{project.contributors.length - 3}
-                          </div>
-                        )}
-                      </TooltipProvider>
-                    </div>
-                  </TableCell>
+                {visibleColumns.team && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[80px] max-w-[100px]">Visibility</TableHead>
                 )}
-                {visibleColumns.includes("Status") && (
-                  <TableCell className="whitespace-nowrap">
-                    <Badge
-                      className={cn(
-                        "whitespace-nowrap",
-                        project.status === "Active" && "bg-green-500 text-white",
-                        project.status === "Inactive" && "bg-gray-400 text-white",
-                        project.status === "In Progress" && "bg-yellow-500 text-white",
-                        project.status === "Private" && "bg-purple-500 text-white",
-                      )}
-                    >
-                      {project.status}
-                    </Badge>
-                  </TableCell>
+                {visibleColumns.tech && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[100px] max-w-[120px]">Language</TableHead>
                 )}
-                {visibleColumns.includes("Actions") && (
-                  <TableCell className="whitespace-nowrap">
-                    <div className="flex gap-2">
-                      {project.owner && project.name ? (
-                        <Link href={`/github/${project.owner}/${project.name}`}>
-                          <Button variant="outline" size="sm" className="flex items-center gap-1">
-                            <Eye className="h-3 w-3" />
-                            View Details
-                          </Button>
-                        </Link>
-                      ) : (
-                        <Link href="/github">
-                          <Button variant="outline" size="sm" className="flex items-center gap-1">
-                            <Eye className="h-3 w-3" />
-                            View
-                          </Button>
-                        </Link>
-                      )}
-                    </div>
-                  </TableCell>
+                {visibleColumns.status && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[90px] max-w-[110px]">Status</TableHead>
+                )}
+                {visibleColumns.stats && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[100px] max-w-[120px]">Stats</TableHead>
+                )}
+                {visibleColumns.contributors && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[100px] max-w-[120px]">Owner</TableHead>
+                )}
+                {visibleColumns.actions && (
+                  <TableHead className="text-gray-300 font-semibold min-w-[100px] max-w-[120px]">Actions</TableHead>
                 )}
               </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={visibleColumns.length} className="text-center py-6">
-                No repositories found.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredData.map((project) => (
+                <TableRow
+                  key={project.id}
+                  className="border-white/5 hover:bg-white/5 transition-colors group"
+                >
+                  {visibleColumns.project && (
+                    <TableCell className="py-4 min-w-[200px] max-w-[300px]">
+                      <div className="space-y-1">
+                        <h3 className="font-semibold text-white group-hover:text-purple-300 transition-colors truncate">
+                          {project.title}
+                        </h3>
+                        {project.description && (
+                          <p className="text-sm text-gray-400 line-clamp-2 break-words">
+                            {project.description}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                          <Clock className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">Created {new Date(project.createdAt).toLocaleDateString()}</span>
+                        </p>
+                      </div>
+                    </TableCell>
+                  )}
+
+                  {visibleColumns.repository && (
+                    <TableCell className="py-4 min-w-[180px] max-w-[240px]">
+                      <Link
+                        href={project.repo}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors group/link"
+                      >
+                        <GitBranch className="w-4 h-4 flex-shrink-0" />
+                        <span className="text-sm font-mono truncate">
+                          {project.owner}/{project.repoName}
+                        </span>
+                        <ExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity flex-shrink-0" />
+                      </Link>
+                    </TableCell>
+                  )}
+
+                  {visibleColumns.team && (
+                    <TableCell className="py-4 min-w-[80px] max-w-[100px]">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <span className="text-sm text-gray-300 truncate">{project.team}</span>
+                      </div>
+                    </TableCell>
+                  )}
+
+                  {visibleColumns.tech && (
+                    <TableCell className="py-4 min-w-[100px] max-w-[120px]">
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "font-medium border-0 truncate max-w-full",
+                          techColors[project.tech as keyof typeof techColors] || "bg-gray-500/20 text-gray-400"
+                        )}
+                      >
+                        <Code className="w-3 h-3 mr-1 flex-shrink-0" />
+                        <span className="truncate">{project.tech}</span>
+                      </Badge>
+                    </TableCell>
+                  )}
+
+                  {visibleColumns.status && (
+                    <TableCell className="py-4 min-w-[90px] max-w-[110px]">
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "font-medium border truncate max-w-full",
+                          statusColors[project.status]
+                        )}
+                      >
+                        <span className="truncate">{project.status}</span>
+                      </Badge>
+                    </TableCell>
+                  )}
+
+                  {visibleColumns.stats && (
+                    <TableCell className="py-4 min-w-[100px] max-w-[120px]">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="flex items-center gap-1 text-gray-400">
+                            <Star className="w-3 h-3 flex-shrink-0" />
+                            {project.stars || 0}
+                          </span>
+                          <span className="flex items-center gap-1 text-gray-400">
+                            <GitBranch className="w-3 h-3 flex-shrink-0" />
+                            {project.commits || 0}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">
+                          Updated {project.lastUpdated || 'recently'}
+                        </p>
+                      </div>
+                    </TableCell>
+                  )}
+
+                  {visibleColumns.contributors && (
+                    <TableCell className="py-4 min-w-[100px] max-w-[120px]">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex -space-x-2">
+                          {project.contributors.slice(0, 2).map((contributor: Contributor, idx: number) => (
+                            <TooltipProvider key={idx}>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Avatar className="w-8 h-8 border-2 border-black hover:z-10 transition-transform hover:scale-110">
+                                    <AvatarImage
+                                      src={contributor.avatar}
+                                      alt={contributor.name}
+                                    />
+                                    <AvatarFallback className="text-xs bg-gradient-to-br from-purple-500 to-blue-500 text-white">
+                                      {contributor.name
+                                        .split(" ")
+                                        .map((n) => n[0])
+                                        .join("")}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                </TooltipTrigger>
+                                <TooltipContent className="bg-black/90 border-white/10 text-white">
+                                  <div className="text-center">
+                                    <p className="font-semibold">{contributor.name}</p>
+                                    <p className="text-xs text-gray-400">{contributor.role}</p>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ))}
+                        </div>
+                        {project.contributors.length > 2 && (
+                          <span className="text-xs text-gray-400">
+                            +{project.contributors.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
+
+                  {visibleColumns.actions && (
+                    <TableCell className="py-4 min-w-[100px] max-w-[120px]">
+                      <div className="flex items-center gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10"
+                                asChild
+                              >
+                                <Link href={`/github/${project.owner}/${project.repoName}`}>
+                                  <Eye className="w-4 h-4" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-black/90 border-white/10 text-white">
+                              View Details
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10"
+                                asChild
+                              >
+                                <Link href="/proof/generate">
+                                  <Zap className="w-4 h-4" />
+                                </Link>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-black/90 border-white/10 text-white">
+                              Generate Proof
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="bg-black/90 border-white/10 backdrop-blur-xl">
+                            <DropdownMenuCheckboxItem className="text-white hover:bg-white/10" asChild>
+                              <Link href={project.repo} target="_blank">
+                                View Repository
+                              </Link>
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem className="text-white hover:bg-white/10" asChild>
+                              <Link href="/proof/generate">
+                                Generate Credential
+                              </Link>
+                            </DropdownMenuCheckboxItem>
+                            <DropdownMenuCheckboxItem className="text-white hover:bg-white/10" asChild>
+                              <Link href={`/github/${project.owner}/${project.repoName}`}>
+                                View Analytics
+                              </Link>
+                            </DropdownMenuCheckboxItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {filteredData.length === 0 && !loading && (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <GitBranch className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-white mb-2">No projects found</h3>
+          <p className="text-gray-400">Try adjusting your search criteria</p>
+        </div>
+      )}
     </div>
   );
-}
-
-export default ContributorsTable; 
+} 
