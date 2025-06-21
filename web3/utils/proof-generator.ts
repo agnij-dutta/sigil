@@ -1,6 +1,7 @@
 
 // Sigil ZK Proof Generator
-import * as snarkjs from "snarkjs";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const snarkjs = require("snarkjs");
 import { ethers } from "ethers";
 
 export interface ProofInput {
@@ -14,6 +15,14 @@ export interface Proof {
   publicSignals: string[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface SnarkProof {
+  a: any[];
+  b: any[][];
+  c: any[];
+  publicSignals: any;
+}
+
 export class SigilProofGenerator {
   private wasmPath: string;
   private zkeyPath: string;
@@ -23,7 +32,7 @@ export class SigilProofGenerator {
     this.zkeyPath = `../build/circuits/zkeys/${circuitName}.zkey`;
   }
   
-  async generateProof(input: ProofInput): Promise<Proof> {
+  async generateProof(input: ProofInput): Promise<SnarkProof> {
     try {
       console.log(`Generating proof for input:`, input);
       

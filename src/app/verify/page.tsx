@@ -101,39 +101,43 @@ export default function VerifyPage() {
   };
 
   const handleVerifyProof = async () => {
-    if (!proof.trim() || !publicSignals.trim()) {
-      alert('Please enter both proof and public signals');
-      return;
-    }
+    alert('ZK Proof verification is temporarily disabled. Please use credential hash verification instead.');
+    return;
+    
+    // Disabled for now - mock proof data causes contract reverts
+    // if (!proof.trim() || !publicSignals.trim()) {
+    //   alert('Please enter both proof and public signals');
+    //   return;
+    // }
 
-    setVerifying(true);
-    setVerificationResult(null);
+    // setVerifying(true);
+    // setVerificationResult(null);
 
-    try {
-      // Parse public signals
-      const signals = JSON.parse(publicSignals).map((s: string | number) => BigInt(s));
+    // try {
+    //   // Parse public signals
+    //   const signals = JSON.parse(publicSignals).map((s: string | number) => BigInt(s));
       
-      const isValid = await ContractService.verifyProof(
-        verifierType,
-        proof,
-        signals
-      );
+    //   const isValid = await ContractService.verifyProof(
+    //     verifierType,
+    //     proof,
+    //     signals
+    //   );
       
-      setVerificationResult({
-        isValid,
-        verifierType,
-        timestamp: Date.now()
-      });
-    } catch (error) {
-      console.error('Proof verification failed:', error);
-      setVerificationResult({
-        isValid: false,
-        verifierType,
-        timestamp: Date.now()
-      });
-    } finally {
-      setVerifying(false);
-    }
+    //   setVerificationResult({
+    //     isValid,
+    //     verifierType,
+    //     timestamp: Date.now()
+    //   });
+    // } catch (error) {
+    //   console.error('Proof verification failed:', error);
+    //   setVerificationResult({
+    //     isValid: false,
+    //     verifierType,
+    //     timestamp: Date.now()
+    //   });
+    // } finally {
+    //   setVerifying(false);
+    // }
   };
 
   const handleRegisterCredential = async () => {

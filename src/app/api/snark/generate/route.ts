@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Import the real snarkjs proof generators
-import { CircuitGenerators, SigilProofGenerator, type ProofInput, type Proof } from '../../../../../web3/utils/proof-generator';
+import { CircuitGenerators, type ProofInput } from '../../../../../web3/utils/proof-generator';
 
 // Simple in-memory cache for proofs (in production, use Redis)
 const proofCache = new Map<string, any>();
@@ -73,8 +73,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<SnarkProo
       });
     }
 
-    // Get the appropriate circuit generator
-    const generator = CircuitGenerators[data.circuitType as keyof typeof CircuitGenerators];
+    // Get the appropriate circuit generator (for future use)
+    // const generator = CircuitGenerators[data.circuitType as keyof typeof CircuitGenerators];
     
     // Check if circuit files exist
     const circuitPath = path.join(process.cwd(), 'build', 'circuits', 'compiled', data.circuitType);
@@ -121,6 +121,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SnarkProo
     console.log(`Using ZKey path: ${absoluteZkeyPath}`);
     
     // Use snarkjs directly with timeout to prevent hanging
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const snarkjs = require('snarkjs');
     
     console.log('Starting ZK proof generation...');
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SnarkProo
     );
     
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('ZK proof generation timed out after 2 minutes')), 120000);
+      setTimeout(() => reject(new Error('ZK proof generation timed out after 60 seconds')), 60000);
     });
     
     const { proof: rawProof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]);

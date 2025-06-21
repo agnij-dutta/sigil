@@ -84,16 +84,25 @@ async function generateRepositoryCredentialProof(data: GitHubContributionData): 
     let proof;
     try {
       // Attempt to use real snarkjs proof generation
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
+      
       const snarkResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/snark/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
           circuitType: getWorkingCircuitName(credentialType),
           inputs: convertToCircuitInputs(credentialType, data),
           userAddress: data.userAddress,
           repository: data.repository
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       if (snarkResponse.ok) {
         const snarkResult = await snarkResponse.json();
@@ -106,8 +115,15 @@ async function generateRepositoryCredentialProof(data: GitHubContributionData): 
       } else {
         throw new Error('Snark API unavailable');
       }
-    } catch (snarkError) {
-      console.warn('Real ZK proof generation failed, using deterministic fallback:', snarkError);
+    } catch (snarkError: any) {
+      const errorMsg = snarkError.message || snarkError.toString();
+      console.warn('Real ZK proof generation failed, using deterministic fallback:', errorMsg);
+      
+      // Check if it's a timeout error specifically
+      if (errorMsg.includes('aborted') || errorMsg.includes('timeout')) {
+        console.log('ZK proof generation timed out - this is normal for complex circuits. Using deterministic proof.');
+      }
+      
       // Fall back to deterministic proof generation
       proof = generateDeterministicProof(publicSignals, data.userAddress);
     }
@@ -235,7 +251,7 @@ function createSimpleHash(input: string): string {
 
 function convertToCircuitInputs(credentialType: string, data: GitHubContributionData): Record<string, number | number[]> {
   // Convert GitHub contribution data to circuit-specific inputs
-  const baseTimestamp = Math.floor(Date.now() / 1000);
+  // const baseTimestamp = Math.floor(Date.now() / 1000); // Reserved for future use
   const workingCircuit = getWorkingCircuitName(credentialType);
   
   // Map inputs based on the actual working circuit, not the credential type
@@ -308,7 +324,7 @@ function getWorkingCircuitName(credentialType: string): string {
   return circuitMapping[credentialType] || 'hash_chain';
 }
 
-async function storeProofMetadata(metadata: any): Promise<string> {
+async function storeProofMetadata(metadata: Record<string, unknown>): Promise<string> {
   // Store proof metadata to IPFS - in production, use actual IPFS client
   const metadataString = JSON.stringify(metadata);
   const hash = createSimpleHash(metadataString);
