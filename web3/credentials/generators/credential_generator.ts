@@ -29,7 +29,8 @@ export class CredentialGenerator {
       metadata: options.includeMetadata ? {
         privacyLevel: options.privacyLevel,
         generationMethod: 'zk-snark',
-        circuitHash: 'repo-circuit-v1-hash'
+        circuitHash: 'repo-circuit-v1-hash',
+        proofSystem: 'groth16'
       } : undefined
     };
   }
@@ -54,7 +55,8 @@ export class CredentialGenerator {
       metadata: options.includeMetadata ? {
         privacyLevel: options.privacyLevel,
         generationMethod: 'zk-snark',
-        circuitHash: 'lang-circuit-v1-hash'
+        circuitHash: 'lang-circuit-v1-hash',
+        proofSystem: 'groth16'
       } : undefined
     };
   }
@@ -94,7 +96,14 @@ export class CredentialGenerator {
 
   private hashRepository(repositoryData: any): string {
     const repoString = `${repositoryData.owner}/${repositoryData.name}`;
-    return Buffer.from(repoString).toString('hex');
+    // Simple hash implementation for demo - use crypto library in production
+    let hash = 0;
+    for (let i = 0; i < repoString.length; i++) {
+      const char = repoString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(16);
   }
 
   private getCommitCountRange(commitCount: number): { min: number; max: number } {
