@@ -20,6 +20,54 @@ export interface RepositoryMetrics {
     ownerHash: string;
 }
 
+// Additional types needed by circuits and web3 components
+export interface CommitData {
+    sha: string;
+    author: string;
+    message: string;
+    timestamp: Date;
+    additions: number;
+    deletions: number;
+    files: string[];
+    url?: string;
+    authorEmail?: string;
+}
+
+export interface CollaboratorData {
+    login: string;
+    id: number;
+    contributions: number;
+    role: string;
+    permissions: string[];
+    joinedAt?: Date;
+}
+
+export interface RepositoryData {
+    name: string;
+    owner: string;
+    fullName: string;
+    description?: string;
+    url: string;
+    isPrivate: boolean;
+    createdAt: string;
+    language?: string;
+    languages?: Record<string, number>;
+    stargazersCount: number;
+    forksCount: number;
+    commits?: CommitData[];
+    collaborators?: CollaboratorData[];
+    totalLOC?: number;
+    branches?: string[];
+}
+
+export interface LanguageData {
+    language: string;
+    linesOfCode: number;
+    fileCount: number;
+    percentage: number;
+    proficiencyLevel: number;
+}
+
 export interface LanguageProficiency {
     language: string;
     totalLOC: number;

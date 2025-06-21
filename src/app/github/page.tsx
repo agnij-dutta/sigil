@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Repository } from '@/lib/github/data';
 import { Header } from "@/components/ui/header";
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   Github, 
@@ -13,7 +12,6 @@ import {
   AlertCircle, 
   ExternalLink, 
   ArrowLeft,
-  Filter,
   Activity,
   Calendar,
   Users,
@@ -21,6 +19,7 @@ import {
   Eye,
   Zap
 } from 'lucide-react';
+import Image from 'next/image';
 
 interface GitHubUser {
   id: number;
@@ -51,17 +50,7 @@ export default function GitHubRepositoriesPage() {
   const [filter, setFilter] = useState<'all' | 'owner' | 'member'>('all');
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'pushed' | 'full_name'>('updated');
 
-  useEffect(() => {
-    fetchAuthData();
-  }, []);
-
-  useEffect(() => {
-    if (authData?.github) {
-      fetchRepositories();
-    }
-  }, [authData, filter, sortBy]);
-
-  const fetchAuthData = async () => {
+  const fetchAuthData = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/me');
       if (response.ok) {
@@ -75,9 +64,9 @@ export default function GitHubRepositoriesPage() {
       setError('Failed to fetch authentication data');
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchRepositories = async () => {
+  const fetchRepositories = useCallback(async () => {
     if (!authData?.github) return;
 
     try {
@@ -94,7 +83,17 @@ export default function GitHubRepositoriesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [authData?.github, filter, sortBy]);
+
+  useEffect(() => {
+    fetchAuthData();
+  }, [fetchAuthData]);
+
+  useEffect(() => {
+    if (authData?.github) {
+      fetchRepositories();
+    }
+  }, [authData?.github, fetchRepositories]);
 
   const getLanguageColor = (language: string | null) => {
     const colors: { [key: string]: string } = {
@@ -161,9 +160,11 @@ export default function GitHubRepositoriesPage() {
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             {authData?.github && (
-              <img
+              <Image
                 src={authData.github.user.avatar_url}
                 alt={authData.github.user.login}
+                width={64}
+                height={64}
                 className="w-16 h-16 rounded-full border-2 border-purple-500/30"
               />
             )}
@@ -224,7 +225,7 @@ export default function GitHubRepositoriesPage() {
                 <div>
                   <p className="text-gray-400 text-sm">Languages</p>
                   <p className="text-2xl font-bold text-white">
-                    {[...new Set(repositories.map(repo => repo.language).filter(Boolean))].length}
+                    {new Set(repositories.map(repo => repo.language).filter(Boolean)).size}
                   </p>
                 </div>
                 <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
@@ -236,10 +237,8 @@ export default function GitHubRepositoriesPage() {
             <div className="glass-card p-6 rounded-2xl">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-400 text-sm">Total Forks</p>
-                  <p className="text-2xl font-bold text-white">
-                    {repositories.reduce((total, repo) => total + (repo.forks_count || 0), 0)}
-                  </p>
+                  <p className="text-gray-400 text-sm">Followers</p>
+                  <p className="text-2xl font-bold text-white">{authData.github.user.followers}</p>
                 </div>
                 <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
                   <Users className="w-5 h-5 text-green-400" />
@@ -250,83 +249,79 @@ export default function GitHubRepositoriesPage() {
         )}
 
         {/* Filters */}
-        <div className="glass-card p-6 rounded-2xl mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Repository Explorer</h2>
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={fetchRepositories}
-                disabled={isLoading}
-                variant="outline"
-                size="sm"
-                className="border-white/20 text-white hover:bg-white/10"
-              >
-                {isLoading ? (
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                ) : (
-                  <Activity className="w-4 h-4 mr-2" />
-                )}
-                Refresh
-              </Button>
-            </div>
-          </div>
-          
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-gray-400">Type:</label>
+              <label className="text-gray-400 text-sm">Filter:</label>
               <select
                 value={filter}
                 onChange={(e) => setFilter(e.target.value as 'all' | 'owner' | 'member')}
-                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                className="bg-white/5 border border-white/10 text-white rounded-lg px-3 py-1 text-sm focus:border-purple-500/50 focus:outline-none"
               >
-                <option value="all">All</option>
-                <option value="owner">Owner</option>
+                <option value="all">All Repositories</option>
+                <option value="owner">Owned by Me</option>
                 <option value="member">Member</option>
               </select>
             </div>
             
             <div className="flex items-center space-x-2">
-              <label className="text-sm font-medium text-gray-400">Sort by:</label>
+              <label className="text-gray-400 text-sm">Sort by:</label>
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'updated' | 'created' | 'pushed' | 'full_name')}
-                className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                className="bg-white/5 border border-white/10 text-white rounded-lg px-3 py-1 text-sm focus:border-purple-500/50 focus:outline-none"
               >
-                <option value="updated">Last updated</option>
-                <option value="created">Created</option>
-                <option value="pushed">Last pushed</option>
+                <option value="updated">Last Updated</option>
+                <option value="created">Created Date</option>
+                <option value="pushed">Last Push</option>
                 <option value="full_name">Name</option>
               </select>
             </div>
           </div>
+
+          <div className="flex items-center space-x-3">
+            <Button 
+              onClick={fetchRepositories}
+              disabled={isLoading}
+              variant="outline" 
+              size="sm" 
+              className="border-white/20 text-white hover:bg-white/10"
+            >
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              ) : (
+                <Activity className="w-4 h-4 mr-2" />
+              )}
+              Refresh
+            </Button>
+          </div>
         </div>
 
-        {/* Loading State */}
-        {isLoading && (
+        {/* Repository Grid */}
+        {isLoading && repositories.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-gray-400">Loading repositories...</p>
           </div>
-        )}
-
-        {/* Error State */}
-        {error && authData && (
-          <div className="glass-card p-6 rounded-2xl mb-6">
-            <div className="flex items-center gap-3 text-red-400">
-              <AlertCircle className="w-5 h-5" />
-              <p>{error}</p>
-            </div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">Error Loading Repositories</h3>
+            <p className="text-red-400 mb-4">{error}</p>
+            <Button onClick={fetchRepositories} className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600">
+              Try Again
+            </Button>
           </div>
-        )}
-
-        {/* Repository Grid */}
-        {!isLoading && repositories.length > 0 && (
+        ) : repositories.length === 0 ? (
+          <div className="text-center py-12">
+            <Github className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-white mb-2">No repositories found</h3>
+            <p className="text-gray-400">Try adjusting your filters or check your GitHub connection.</p>
+          </div>
+        ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {repositories.map((repo) => (
-              <div
-                key={repo.id}
-                className="glass-card p-6 rounded-2xl hover:bg-white/10 transition-all duration-200 group"
-              >
+              <div key={repo.id} className="glass-card p-6 rounded-2xl hover:bg-white/5 transition-colors group">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1 min-w-0">
                     <h3 className="text-lg font-semibold text-white group-hover:text-purple-300 transition-colors truncate">
@@ -338,93 +333,71 @@ export default function GitHubRepositoriesPage() {
                       </p>
                     )}
                   </div>
-                  {repo.private && (
-                    <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 ml-2">
-                      Private
-                    </Badge>
-                  )}
-                </div>
-
-                <div className="flex items-center space-x-4 text-sm text-gray-400 mb-4">
-                  {repo.language && (
-                    <div className="flex items-center space-x-1">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: getLanguageColor(repo.language) }}
-                      ></div>
-                      <span>{repo.language}</span>
-                    </div>
-                  )}
-                  
-                  {repo.stargazers_count > 0 && (
-                    <div className="flex items-center space-x-1">
-                      <Star className="w-4 h-4" />
-                      <span>{repo.stargazers_count}</span>
-                    </div>
-                  )}
-                  
-                  {repo.forks_count > 0 && (
-                    <div className="flex items-center space-x-1">
-                      <GitBranch className="w-4 h-4" />
-                      <span>{repo.forks_count}</span>
-                    </div>
-                  )}
-                  
-                  {repo.open_issues_count > 0 && (
-                    <div className="flex items-center space-x-1">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>{repo.open_issues_count}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center text-xs text-gray-500">
-                    <Calendar className="w-3 h-3 mr-1" />
-                    Updated {formatDate(repo.updated_at)}
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white" asChild>
+                  <div className="flex items-center space-x-2 ml-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10"
+                      asChild
+                    >
                       <Link href={`/github/${repo.owner.login}/${repo.name}`}>
                         <Eye className="w-4 h-4" />
                       </Link>
                     </Button>
-                    
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-purple-400" asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-gray-400 hover:text-purple-400 hover:bg-purple-500/10"
+                      asChild
+                    >
                       <Link href="/proof/generate">
                         <Zap className="w-4 h-4" />
                       </Link>
                     </Button>
-                    
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-gray-400 hover:text-white" asChild>
-                      <Link href={repo.html_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="w-4 h-4" />
-                      </Link>
-                    </Button>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-4 text-sm text-gray-400">
+                    {repo.language && (
+                      <div className="flex items-center space-x-1">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: getLanguageColor(repo.language) }}
+                        />
+                        <span>{repo.language}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center space-x-1">
+                      <Star className="w-4 h-4" />
+                      <span>{repo.stargazers_count}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <GitBranch className="w-4 h-4" />
+                      <span>{repo.forks_count}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 text-xs text-gray-500">
+                    <Calendar className="w-3 h-3" />
+                    <span>Updated {formatDate(repo.updated_at)}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs text-gray-400 hover:text-white"
+                    asChild
+                  >
+                    <Link href={repo.html_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-3 h-3 mr-1" />
+                      GitHub
+                    </Link>
+                  </Button>
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && repositories.length === 0 && !error && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Github className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">No repositories found</h3>
-            <p className="text-gray-400 mb-4">
-              Try changing your filter settings or check your GitHub account.
-            </p>
-            <Button variant="outline" className="border-white/20 text-white hover:bg-white/10" asChild>
-              <Link href="/dashboard">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Link>
-            </Button>
           </div>
         )}
       </div>

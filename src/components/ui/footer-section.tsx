@@ -11,12 +11,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { Facebook, Instagram, Linkedin, Moon, Send, Sun, Twitter } from "lucide-react"
+import { Linkedin, Moon, Send, Sun, Twitter } from "lucide-react"
 import { useTheme } from "next-themes"
 
 function FooterSection() {
   const { theme, setTheme } = useTheme()
-  const [isChatOpen, setIsChatOpen] = React.useState(false)
 
   const toggleTheme = () => {
     setTheme(theme === "light" ? "dark" : "light")

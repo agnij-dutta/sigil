@@ -1,17 +1,16 @@
 "use client"
 
 import * as React from "react"
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "./badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { 
   Shield, 
   Zap, 
+  Globe, 
   Users, 
-  GitBranch, 
-  Award, 
-  Lock,
-  Globe,
-  Sparkles
+  Sparkles,
+  GitBranch,
+  Award
 } from "lucide-react"
 
 const features = [

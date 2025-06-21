@@ -5,9 +5,12 @@ import { AuthToken } from '@/types/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { owner: string; repo: string } }
+  { params }: { params: Promise<{ owner: string; repo: string }> }
 ) {
   try {
+    // Await the params since they're now a Promise
+    const { owner, repo } = await params;
+    
     // Verify authentication
     const authCookie = request.cookies.get('sigil_auth')?.value;
     if (!authCookie) {
@@ -29,57 +32,65 @@ export async function GET(
       );
     }
 
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const username = decoded.github.user.login; // Use authenticated user's username
-    const since = searchParams.get('since') || undefined;
-    const until = searchParams.get('until') || undefined;
-    const path = searchParams.get('path') || undefined;
-    const per_page = parseInt(searchParams.get('per_page') || '30');
-    const page = parseInt(searchParams.get('page') || '1');
-
     // Create GitHub data service instance
     const githubService = new GitHubDataService(decoded.github.accessToken);
 
-    // First verify user has access and check collaboration status
-    const [permission, isCollab] = await Promise.all([
-      githubService.getRepositoryPermission(params.owner, params.repo),
-      githubService.isCollaborator(params.owner, params.repo, username)
+    // Get the username (authenticated user)
+    const username = decoded.github.user.login;
+
+    // Get query parameters
+    const searchParams = request.nextUrl.searchParams;
+    const page = parseInt(searchParams.get('page') || '1');
+    const per_page = parseInt(searchParams.get('per_page') || '30');
+    const sha = searchParams.get('sha') || undefined;
+    const path = searchParams.get('path') || undefined;
+    const since = searchParams.get('since') || undefined;
+    const until = searchParams.get('until') || undefined;
+
+    // Verify user has access to the repository and is a collaborator
+    const [permission, isCollaborator] = await Promise.all([
+      githubService.getRepositoryPermission(owner, repo),
+      githubService.isCollaborator(owner, repo, username)
     ]);
 
-    if (!permission || (permission.permission === 'none' && !isCollab)) {
+    if (!permission || permission.permission === 'none') {
       return NextResponse.json(
         { error: 'Access denied: You do not have access to this repository' },
         { status: 403 }
       );
     }
 
-    // Fetch user's commits from the repository
+    // Get user's commits from the repository
     const commits = await githubService.getUserCommitsFromRepo(
-      params.owner,
-      params.repo,
+      owner,
+      repo,
       username,
       {
+        sha,
+        path,
         since,
         until,
-        path,
         per_page,
-        page,
+        page
       }
     );
 
     return NextResponse.json({
-      repository: `${params.owner}/${params.repo}`,
-      user: username,
+      repository: `${owner}/${repo}`,
+      username,
+      isCollaborator,
+      permission: permission.permission,
       commits,
-      total: commits.length,
-      permission: permission?.permission || 'collaborator',
-      isCollaborator: isCollab,
+      pagination: {
+        page,
+        per_page,
+        total: commits.length
+      }
     });
   } catch (error) {
     console.error('Error fetching user commits:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch user commits from repository' },
+      { error: 'Failed to fetch user commits' },
       { status: 500 }
     );
   }

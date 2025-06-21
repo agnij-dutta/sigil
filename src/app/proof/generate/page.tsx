@@ -1,64 +1,78 @@
 'use client';
 
-import { Header } from "@/components/ui/header"
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
+import { Header } from "@/components/ui/header";
 import { 
-  ArrowLeft,
-  Github, 
+  ArrowLeft, 
+  Download, 
+  RefreshCw, 
   Shield, 
-  Zap,
-  CheckCircle,
-  AlertCircle,
-  Clock,
-  User,
-  Code,
+  CheckCircle, 
+  AlertCircle, 
+  Zap, 
+  Github,
   GitBranch,
   Star,
-  Eye,
+  Clock,
   FileCheck,
-  Loader2,
-  Download,
-  Copy,
-  ExternalLink
+  Settings
 } from 'lucide-react';
 import Link from 'next/link';
 import { useWallet } from '../../../../web3/wallet/hooks/useWallet';
 
 interface Repository {
-  id: string;
+  id: number;
   name: string;
   full_name: string;
+  description: string | null;
   html_url: string;
-  description: string;
-  language: string;
+  language: string | null;
   stargazers_count: number;
   forks_count: number;
+  created_at: string;
   updated_at: string;
   private: boolean;
+  owner: {
+    login: string;
+    avatar_url: string;
+  };
 }
 
-interface ProofData {
-  repositoryData: any;
-  contributions: any;
-  skillAnalysis: any;
+interface GenerationOptions {
   privacyLevel: 'minimal' | 'balanced' | 'maximum';
+  includeMetrics: boolean;
+  includeCollaborators: boolean;
+  timeRange: 'all' | '1year' | '6months' | '3months';
 }
 
-export default function ProofGeneration() {
-  const { isAuthenticated, hasWallet } = useWallet();
+interface ProofGenerationState {
+  status: 'idle' | 'generating' | 'success' | 'error';
+  proof: string | null;
+  error: string | null;
+  progress: number;
+}
+
+export default function ProofGenerationPage() {
+  const { user, isAuthenticated, hasWallet } = useWallet();
+  
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<Repository | null>(null);
   const [loadingRepos, setLoadingRepos] = useState(false);
-  const [generatingProof, setGeneratingProof] = useState(false);
-  const [proofData, setProofData] = useState<ProofData | null>(null);
-  const [step, setStep] = useState(1);
-  const [privacyLevel, setPrivacyLevel] = useState<'minimal' | 'balanced' | 'maximum'>('balanced');
-  const [generatedProof, setGeneratedProof] = useState<string | null>(null);
+  const [generationState, setGenerationState] = useState<ProofGenerationState>({
+    status: 'idle',
+    proof: null,
+    error: null,
+    progress: 0
+  });
+  const [options, setOptions] = useState<GenerationOptions>({
+    privacyLevel: 'balanced',
+    includeMetrics: true,
+    includeCollaborators: false,
+    timeRange: '1year'
+  });
 
   useEffect(() => {
     if (isAuthenticated && hasWallet) {
@@ -69,7 +83,7 @@ export default function ProofGeneration() {
   const fetchRepositories = async () => {
     try {
       setLoadingRepos(true);
-      const response = await fetch('/api/github/repositories');
+      const response = await fetch('/api/github/collaborative-repositories');
       if (response.ok) {
         const data = await response.json();
         setRepositories(data.repositories || []);
@@ -83,53 +97,114 @@ export default function ProofGeneration() {
 
   const generateProof = async () => {
     if (!selectedRepo) return;
-    
-    try {
-      setGeneratingProof(true);
-      setStep(3);
 
-      // Simulate proof generation steps
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Mock generated proof
+    setGenerationState({
+      status: 'generating',
+      proof: null,
+      error: null,
+      progress: 0
+    });
+
+    try {
+      // Simulate proof generation progress
+      const steps = [
+        'Analyzing repository structure...',
+        'Collecting commit data...',
+        'Processing contribution metrics...',
+        'Generating zero-knowledge proof...',
+        'Finalizing credential...'
+      ];
+
+      for (let i = 0; i < steps.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setGenerationState(prev => ({
+          ...prev,
+          progress: ((i + 1) / steps.length) * 100
+        }));
+      }
+
+      // Mock proof data
       const mockProof = {
-        proof: "zk_proof_" + Date.now(),
-        publicSignals: ["signal1", "signal2"],
-        metadata: {
-          repository: selectedRepo.full_name,
-          timestamp: new Date().toISOString(),
-          privacyLevel
+        credential: {
+          '@context': ['https://www.w3.org/2018/credentials/v1'],
+          type: ['VerifiableCredential', 'GitHubContributionCredential'],
+          credentialSubject: {
+            id: user?.email || 'developer@example.com',
+            repository: selectedRepo.full_name,
+            contributions: {
+              commits: Math.floor(Math.random() * 100) + 50,
+              linesAdded: Math.floor(Math.random() * 5000) + 1000,
+              filesModified: Math.floor(Math.random() * 50) + 10,
+              collaborators: options.includeCollaborators ? Math.floor(Math.random() * 5) + 1 : null
+            },
+            privacy: options.privacyLevel,
+            timeRange: options.timeRange
+          },
+          issuer: 'did:web:sigil.dev',
+          issuanceDate: new Date().toISOString(),
+          proof: {
+            type: 'ZKProof',
+            proofValue: `zk_proof_${Math.random().toString(36).substring(2, 15)}`,
+            verificationMethod: 'https://sigil.dev/verification'
+          }
         }
       };
 
-      setGeneratedProof(JSON.stringify(mockProof, null, 2));
-      setStep(4);
+      setGenerationState({
+        status: 'success',
+        proof: JSON.stringify(mockProof, null, 2),
+        error: null,
+        progress: 100
+      });
+
     } catch (error) {
-      console.error('Failed to generate proof:', error);
-    } finally {
-      setGeneratingProof(false);
+      setGenerationState({
+        status: 'error',
+        proof: null,
+        error: error instanceof Error ? error.message : 'Failed to generate proof',
+        progress: 0
+      });
     }
   };
 
-  const copyProof = () => {
-    if (generatedProof) {
-      navigator.clipboard.writeText(generatedProof);
-    }
+  const downloadProof = () => {
+    if (!generationState.proof) return;
+
+    const blob = new Blob([generationState.proof], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${selectedRepo?.name || 'credential'}-proof.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const resetGeneration = () => {
+    setGenerationState({
+      status: 'idle',
+      proof: null,
+      error: null,
+      progress: 0
+    });
   };
 
   if (!isAuthenticated || !hasWallet) {
     return (
       <div className="min-h-screen bg-black">
         <Header />
-        <div className="container mx-auto px-6 py-12">
+        <div className="container mx-auto px-4 py-8">
           <div className="glass-card p-8 rounded-2xl text-center max-w-md mx-auto">
-            <Shield className="w-16 h-16 text-purple-400 mx-auto mb-6" />
-            <h2 className="text-2xl font-bold text-white mb-4">Authentication Required</h2>
-            <p className="text-gray-400 mb-6">
-              Please connect your wallet and GitHub account to generate proofs.
-            </p>
-            <Button asChild className="bg-gradient-to-r from-purple-500 to-blue-500">
-              <Link href="/dashboard">Go to Dashboard</Link>
+            <Shield className="w-16 h-16 text-gray-500 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">Authentication Required</h3>
+            <p className="text-gray-400 mb-6">Please connect your identity and GitHub account to generate proofs</p>
+            <Button className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600" asChild>
+              <Link href="/dashboard">
+                Go to Dashboard
+              </Link>
             </Button>
           </div>
         </div>
@@ -141,10 +216,15 @@ export default function ProofGeneration() {
     <div className="min-h-screen bg-black">
       <Header />
       
-      <div className="container mx-auto px-6 py-8">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <Button variant="ghost" asChild className="text-gray-400 hover:text-white">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Generate Proof</h1>
+            <p className="text-gray-400">Create verifiable credentials from your development work</p>
+          </div>
+          
+          <Button variant="outline" className="border-white/20 text-white hover:bg-white/10" asChild>
             <Link href="/dashboard">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Dashboard
@@ -152,307 +232,286 @@ export default function ProofGeneration() {
           </Button>
         </div>
 
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-white mb-4">Generate Zero-Knowledge Proof</h1>
-            <p className="text-gray-400 text-lg">
-              Create verifiable credentials from your GitHub contributions while preserving privacy
-            </p>
-          </div>
-
-          {/* Progress Steps */}
-          <div className="flex items-center justify-center mb-12">
-            <div className="flex items-center space-x-4">
-              {[
-                { num: 1, label: 'Select Repository', icon: Github },
-                { num: 2, label: 'Configure Privacy', icon: Shield },
-                { num: 3, label: 'Generate Proof', icon: Zap },
-                { num: 4, label: 'Download Result', icon: Download }
-              ].map(({ num, label, icon: Icon }, index) => (
-                <div key={num} className="flex items-center">
-                  <div className={`flex items-center gap-2 ${step >= num ? 'text-purple-400' : 'text-gray-500'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
-                      step >= num 
-                        ? 'border-purple-400 bg-purple-400/20' 
-                        : 'border-gray-500 bg-gray-500/10'
-                    }`}>
-                      {step > num ? (
-                        <CheckCircle className="w-4 h-4" />
-                      ) : (
-                        <Icon className="w-4 h-4" />
-                      )}
-                    </div>
-                    <span className="text-sm font-medium hidden sm:block">{label}</span>
-                  </div>
-                  {index < 3 && (
-                    <div className={`w-8 h-px mx-4 ${step > num ? 'bg-purple-400' : 'bg-gray-600'}`} />
-                  )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Repository Selection */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Step 1: Select Repository */}
+            <div className="glass-card p-6 rounded-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <span className="text-blue-400 font-bold">1</span>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Step 1: Repository Selection */}
-          {step === 1 && (
-            <div className="space-y-6">
-              <div className="glass-card p-6 rounded-2xl">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Github className="w-5 h-5" />
-                  Select Repository
-                </h2>
-                <p className="text-gray-400 mb-6">
-                  Choose a repository to generate verifiable proof of your contributions
-                </p>
-
-                {loadingRepos ? (
-                  <div className="text-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-4 text-purple-400" />
-                    <p className="text-gray-400">Loading repositories...</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4">
-                    {repositories.map((repo) => (
-                      <div
-                        key={repo.id}
-                        className={`glass-card p-4 rounded-xl cursor-pointer transition-all hover:bg-white/10 ${
-                          selectedRepo?.id === repo.id ? 'border-purple-400 bg-purple-500/10' : 'border-white/10'
-                        }`}
-                        onClick={() => setSelectedRepo(repo)}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-white">{repo.name}</h3>
-                              {repo.private && (
-                                <Badge variant="secondary" className="bg-yellow-500/20 text-yellow-400 text-xs">
-                                  Private
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-gray-400 text-sm mb-3">
-                              {repo.description || 'No description available'}
-                            </p>
-                            <div className="flex items-center gap-4 text-xs text-gray-500">
-                              <span className="flex items-center gap-1">
-                                <Code className="w-3 h-3" />
-                                {repo.language || 'Unknown'}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Star className="w-3 h-3" />
-                                {repo.stargazers_count}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <GitBranch className="w-3 h-3" />
-                                {repo.forks_count}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {new Date(repo.updated_at).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            asChild
-                            className="text-gray-400 hover:text-white"
-                          >
-                            <Link href={repo.html_url} target="_blank">
-                              <ExternalLink className="w-4 h-4" />
-                            </Link>
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {selectedRepo && (
-                  <div className="mt-6 flex justify-end">
-                    <Button
-                      onClick={() => setStep(2)}
-                      className="bg-gradient-to-r from-purple-500 to-blue-500"
-                    >
-                      Next: Configure Privacy
-                    </Button>
-                  </div>
-                )}
+                <h2 className="text-xl font-semibold text-white">Select Repository</h2>
               </div>
-            </div>
-          )}
-
-          {/* Step 2: Privacy Configuration */}
-          {step === 2 && selectedRepo && (
-            <div className="space-y-6">
-              <div className="glass-card p-6 rounded-2xl">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Shield className="w-5 h-5" />
-                  Configure Privacy Level
-                </h2>
-                <p className="text-gray-400 mb-6">
-                  Choose how much information to reveal in your proof for repository: <span className="text-white font-mono">{selectedRepo.full_name}</span>
-                </p>
-
-                <div className="grid gap-4">
-                  {[
-                    {
-                      level: 'minimal' as const,
-                      title: 'Minimal Privacy',
-                      description: 'Reveals repository name, commit count, and languages used',
-                      features: ['Repository identification', 'Commit statistics', 'Language breakdown', 'Contribution timeline']
-                    },
-                    {
-                      level: 'balanced' as const,
-                      title: 'Balanced Privacy',
-                      description: 'Reveals general contribution patterns without specific details',
-                      features: ['Activity patterns', 'Skill proficiency', 'Collaboration metrics', 'Code quality indicators']
-                    },
-                    {
-                      level: 'maximum' as const,
-                      title: 'Maximum Privacy',
-                      description: 'Only proves contribution existence without revealing specifics',
-                      features: ['Contribution existence', 'General timeframe', 'Skill categories', 'Peer validation']
-                    }
-                  ].map(({ level, title, description, features }) => (
+              
+              {loadingRepos ? (
+                <div className="text-center py-8">
+                  <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                  <p className="text-gray-400">Loading repositories...</p>
+                </div>
+              ) : repositories.length === 0 ? (
+                <div className="text-center py-8">
+                  <Github className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                  <p className="text-gray-400 mb-4">No repositories found</p>
+                  <Button variant="outline" className="border-white/20 text-white hover:bg-white/10" asChild>
+                    <Link href="/dashboard">Connect GitHub</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-3 max-h-96 overflow-y-auto">
+                  {repositories.map((repo) => (
                     <div
-                      key={level}
-                      className={`glass-card p-4 rounded-xl cursor-pointer transition-all hover:bg-white/10 ${
-                        privacyLevel === level ? 'border-purple-400 bg-purple-500/10' : 'border-white/10'
+                      key={repo.id}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedRepo?.id === repo.id
+                          ? 'border-purple-500/50 bg-purple-500/10'
+                          : 'border-white/10 hover:border-white/20 hover:bg-white/5'
                       }`}
-                      onClick={() => setPrivacyLevel(level)}
+                      onClick={() => setSelectedRepo(repo)}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-4 h-4 rounded-full border-2 mt-1 ${
-                          privacyLevel === level ? 'border-purple-400 bg-purple-400' : 'border-gray-500'
-                        }`} />
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-white mb-1">{title}</h3>
-                          <p className="text-gray-400 text-sm mb-3">{description}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {features.map((feature) => (
-                              <Badge
-                                key={feature}
-                                variant="secondary"
-                                className="bg-gray-500/20 text-gray-300 text-xs"
-                              >
-                                {feature}
-                              </Badge>
-                            ))}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-white font-medium">{repo.name}</h3>
+                          <p className="text-gray-400 text-sm">{repo.description || 'No description'}</p>
+                          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                            {repo.language && (
+                              <span className="flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-blue-400"></div>
+                                {repo.language}
+                              </span>
+                            )}
+                            <span className="flex items-center gap-1">
+                              <Star className="w-3 h-3" />
+                              {repo.stargazers_count}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <GitBranch className="w-3 h-3" />
+                              {repo.forks_count}
+                            </span>
                           </div>
                         </div>
+                        {selectedRepo?.id === repo.id && (
+                          <CheckCircle className="w-5 h-5 text-purple-400" />
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
-
-                <div className="mt-6 flex justify-between">
-                  <Button
-                    variant="outline"
-                    onClick={() => setStep(1)}
-                    className="border-white/20 text-white hover:bg-white/10"
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    onClick={generateProof}
-                    className="bg-gradient-to-r from-purple-500 to-blue-500"
-                  >
-                    Generate Proof
-                  </Button>
-                </div>
-              </div>
+              )}
             </div>
-          )}
 
-          {/* Step 3: Generating Proof */}
-          {step === 3 && generatingProof && (
-            <div className="space-y-6">
-              <div className="glass-card p-8 rounded-2xl text-center">
-                <Loader2 className="w-16 h-16 animate-spin mx-auto mb-6 text-purple-400" />
-                <h2 className="text-2xl font-bold text-white mb-4">Generating Zero-Knowledge Proof</h2>
-                <p className="text-gray-400 mb-6">
-                  Processing your contributions and generating cryptographic proof...
-                </p>
-                <div className="space-y-2 text-sm text-gray-400">
-                  <p>• Analyzing repository data...</p>
-                  <p>• Computing contribution metrics...</p>
-                  <p>• Generating zero-knowledge circuit...</p>
-                  <p>• Creating verifiable proof...</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 4: Proof Generated */}
-          {step === 4 && generatedProof && (
-            <div className="space-y-6">
+            {/* Step 2: Configure Options */}
+            {selectedRepo && (
               <div className="glass-card p-6 rounded-2xl">
-                <div className="text-center mb-6">
-                  <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold text-white mb-2">Proof Generated Successfully!</h2>
-                  <p className="text-gray-400">
-                    Your zero-knowledge proof is ready to be shared and verified
-                  </p>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                    <span className="text-purple-400 font-bold">2</span>
+                  </div>
+                  <h2 className="text-xl font-semibold text-white">Configure Proof</h2>
                 </div>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-300 mb-2 block">
-                      Generated Proof (JSON)
-                    </label>
-                    <div className="relative">
-                      <Textarea
-                        value={generatedProof}
-                        readOnly
-                        className="bg-black/50 border-white/10 text-white font-mono text-xs h-48 resize-none"
-                      />
-                      <Button
-                        onClick={copyProof}
-                        variant="ghost"
-                        size="sm"
-                        className="absolute top-2 right-2 text-gray-400 hover:text-white"
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Privacy Level</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['minimal', 'balanced', 'maximum'] as const).map((level) => (
+                        <button
+                          key={level}
+                          onClick={() => setOptions(prev => ({ ...prev, privacyLevel: level }))}
+                          className={`p-3 rounded-lg text-sm font-medium transition-colors ${
+                            options.privacyLevel === level
+                              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                              : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          {level.charAt(0).toUpperCase() + level.slice(1)}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="flex gap-3">
-                    <Button
-                      className="bg-gradient-to-r from-purple-500 to-blue-500 flex-1"
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Time Range</label>
+                    <select
+                      value={options.timeRange}
+                      onChange={(e) => setOptions(prev => ({ ...prev, timeRange: e.target.value as GenerationOptions['timeRange'] }))}
+                      className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 text-sm focus:border-purple-500/50 focus:outline-none"
                     >
-                      <Download className="w-4 h-4 mr-2" />
-                      Download Proof
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="border-white/20 text-white hover:bg-white/10 flex-1"
-                      asChild
-                    >
-                      <Link href="/verify">
-                        <FileCheck className="w-4 h-4 mr-2" />
-                        Verify Proof
-                      </Link>
-                    </Button>
+                      <option value="all">All time</option>
+                      <option value="1year">Last year</option>
+                      <option value="6months">Last 6 months</option>
+                      <option value="3months">Last 3 months</option>
+                    </select>
                   </div>
 
-                  <div className="text-center pt-4">
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setStep(1);
-                        setSelectedRepo(null);
-                        setGeneratedProof(null);
-                      }}
-                      className="text-gray-400 hover:text-white"
-                    >
-                      Generate Another Proof
-                    </Button>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={options.includeMetrics}
+                        onChange={(e) => setOptions(prev => ({ ...prev, includeMetrics: e.target.checked }))}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-purple-500 focus:ring-purple-500/50"
+                      />
+                      <span className="text-sm text-gray-300">Include contribution metrics</span>
+                    </label>
+                    
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={options.includeCollaborators}
+                        onChange={(e) => setOptions(prev => ({ ...prev, includeCollaborators: e.target.checked }))}
+                        className="w-4 h-4 rounded border-white/20 bg-white/5 text-purple-500 focus:ring-purple-500/50"
+                      />
+                      <span className="text-sm text-gray-300">Include collaborator information</span>
+                    </label>
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Step 3: Generate */}
+            {selectedRepo && (
+              <div className="glass-card p-6 rounded-2xl">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                    <span className="text-green-400 font-bold">3</span>
+                  </div>
+                  <h2 className="text-xl font-semibold text-white">Generate Proof</h2>
+                </div>
+
+                {generationState.status === 'idle' && (
+                  <Button
+                    onClick={generateProof}
+                    className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    Generate Verifiable Credential
+                  </Button>
+                )}
+
+                {generationState.status === 'generating' && (
+                  <div className="space-y-4">
+                    <div className="w-full bg-white/10 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${generationState.progress}%` }}
+                      ></div>
+                    </div>
+                    <p className="text-center text-gray-400">Generating proof... {Math.round(generationState.progress)}%</p>
+                  </div>
+                )}
+
+                {generationState.status === 'success' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-green-400">
+                      <CheckCircle className="w-5 h-5" />
+                      <span className="font-medium">Proof generated successfully!</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={downloadProof} className="flex-1">
+                        <Download className="w-4 h-4 mr-2" />
+                        Download Credential
+                      </Button>
+                      <Button onClick={resetGeneration} variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                        <RefreshCw className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {generationState.status === 'error' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-red-400">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="font-medium">Generation failed</span>
+                    </div>
+                    <p className="text-gray-400 text-sm">{generationState.error}</p>
+                    <Button onClick={resetGeneration} variant="outline" className="w-full border-white/20 text-white hover:bg-white/10">
+                      Try Again
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar: Proof Preview */}
+          <div className="space-y-6">
+            <div className="glass-card p-6 rounded-2xl">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <FileCheck className="w-5 h-5" />
+                Proof Preview
+              </h3>
+              
+              {!selectedRepo ? (
+                <div className="text-center py-8">
+                  <Settings className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm">Select a repository to preview the proof structure</p>
+                </div>
+              ) : generationState.proof ? (
+                <div>
+                  <Textarea
+                    value={generationState.proof}
+                    readOnly
+                    className="w-full h-64 text-xs font-mono bg-white/5 border-white/10 text-gray-300"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div className="p-3 bg-white/5 rounded-lg">
+                    <p className="text-gray-300 font-medium">Repository:</p>
+                    <p className="text-purple-400">{selectedRepo.full_name}</p>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg">
+                    <p className="text-gray-300 font-medium">Privacy Level:</p>
+                    <p className="text-blue-400 capitalize">{options.privacyLevel}</p>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg">
+                    <p className="text-gray-300 font-medium">Time Range:</p>
+                    <p className="text-green-400">{options.timeRange === 'all' ? 'All time' : `Last ${options.timeRange.replace(/(\d+)/, '$1 ')}`}</p>
+                  </div>
+                  <div className="p-3 bg-white/5 rounded-lg">
+                    <p className="text-gray-300 font-medium">Features:</p>
+                    <div className="space-y-1 mt-1">
+                      {options.includeMetrics && (
+                        <Badge variant="secondary" className="bg-purple-500/20 text-purple-400 text-xs">
+                          Contribution metrics
+                        </Badge>
+                      )}
+                      {options.includeCollaborators && (
+                        <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 text-xs">
+                          Collaborator info
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="glass-card p-6 rounded-2xl">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                Recent Activity
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Last proof generated:</span>
+                  <span className="text-white">2 days ago</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Total proofs:</span>
+                  <span className="text-white">3</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Success rate:</span>
+                  <span className="text-green-400">100%</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

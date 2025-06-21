@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 import { 
   Repository, 
   Issue, 
@@ -32,19 +33,9 @@ export default function RepositoryDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (owner && repo) {
-      fetchRepositoryData();
-    }
-  }, [owner, repo]);
-
-  useEffect(() => {
-    if (repository && activeTab !== 'overview') {
-      fetchTabData(activeTab);
-    }
-  }, [activeTab, repository]);
-
-  const fetchRepositoryData = async () => {
+  const fetchRepositoryData = useCallback(async () => {
+    if (!owner || !repo) return;
+    
     try {
       setIsLoading(true);
       const response = await fetch(`/api/github/repositories/${owner}/${repo}`);
@@ -59,10 +50,13 @@ export default function RepositoryDetailsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [owner, repo]);
 
-  const fetchTabData = async (tab: TabType) => {
+  const fetchTabData = useCallback(async (tab: TabType) => {
+    if (!owner || !repo) return;
+    
     try {
+      setIsLoading(true);
       let endpoint = '';
       switch (tab) {
         case 'issues':
@@ -113,8 +107,18 @@ export default function RepositoryDetailsPage() {
       }
     } catch (err) {
       console.error(`Failed to fetch ${tab} data:`, err);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [owner, repo]);
+
+  useEffect(() => {
+    fetchRepositoryData();
+  }, [fetchRepositoryData]);
+
+  useEffect(() => {
+    fetchTabData(activeTab);
+  }, [fetchTabData, activeTab]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -395,9 +399,11 @@ export default function RepositoryDetailsPage() {
                         )}
                       </div>
                     </div>
-                    <img
+                    <Image
                       src={issue.user.avatar_url}
                       alt={issue.user.login}
+                      width={32}
+                      height={32}
                       className="w-8 h-8 rounded-full"
                     />
                   </div>
@@ -465,9 +471,11 @@ export default function RepositoryDetailsPage() {
                         )}
                       </div>
                     </div>
-                    <img
+                    <Image
                       src={pr.user.avatar_url}
                       alt={pr.user.login}
+                      width={32}
+                      height={32}
                       className="w-8 h-8 rounded-full"
                     />
                   </div>
@@ -514,13 +522,13 @@ export default function RepositoryDetailsPage() {
                         </span>
                       </div>
                     </div>
-                    {commit.author && (
-                      <img
-                        src={commit.author.avatar_url}
-                        alt={commit.author.login}
-                        className="w-8 h-8 rounded-full"
-                      />
-                    )}
+                    <Image
+                      src={commit.author?.avatar_url || '/default-avatar.png'}
+                      alt={commit.author?.login || 'Unknown'}
+                      width={40}
+                      height={40}
+                      className="w-8 h-8 rounded-full"
+                    />
                   </div>
                 </div>
               ))
@@ -538,9 +546,11 @@ export default function RepositoryDetailsPage() {
               collaborators.map((collaborator) => (
                 <div key={collaborator.id} className="bg-white border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center space-x-3">
-                    <img
-                      src={collaborator.avatar_url}
-                      alt={collaborator.login}
+                    <Image
+                      src={collaborator.avatar_url || '/default-avatar.png'}
+                      alt={collaborator.login || 'Unknown'}
+                      width={40}
+                      height={40}
                       className="w-12 h-12 rounded-full"
                     />
                     <div className="flex-1">
@@ -640,9 +650,11 @@ export default function RepositoryDetailsPage() {
                         )}
                       </div>
                     </div>
-                    <img
+                    <Image
                       src={release.author.avatar_url}
                       alt={release.author.login}
+                      width={32}
+                      height={32}
                       className="w-8 h-8 rounded-full"
                     />
                   </div>

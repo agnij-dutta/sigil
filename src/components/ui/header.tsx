@@ -12,9 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Menu, X } from "lucide-react"
-
 function Header() {
-  const { theme, setTheme } = useTheme()
+  const { setTheme } = useTheme()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
 
   const navigation = [
@@ -22,10 +21,6 @@ function Header() {
     { name: "How It Works", href: "#how-it-works" },
     { name: "Dashboard", href: "/dashboard" },
   ]
-
-  const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light")
-  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

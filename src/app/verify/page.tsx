@@ -1,27 +1,23 @@
 'use client';
 
-import { Header } from "@/components/ui/header"
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Header } from "@/components/ui/header";
 import { 
-  ArrowLeft,
   Shield, 
-  CheckCircle,
+  Upload, 
+  CheckCircle, 
   XCircle,
-  AlertTriangle,
-  Upload,
+  ArrowLeft,
   FileText,
-  Loader2,
-  Eye,
-  ExternalLink,
-  Clock,
-  User,
-  Github,
   Zap,
-  Info
+  Loader2,
+  Info,
+  Eye,
+  Github
 } from 'lucide-react';
 import Link from 'next/link';
 

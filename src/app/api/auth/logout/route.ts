@@ -25,8 +25,6 @@ export async function POST(request: NextRequest) {
     if (provider) {
       if (provider === 'github') {
         delete currentAuth.github;
-      } else if (provider === 'telegram') {
-        delete currentAuth.telegram;
       } else if (provider === 'civic') {
         delete currentAuth.civic;
       }
@@ -36,7 +34,7 @@ export async function POST(request: NextRequest) {
       delete currentAuth.iat;
       
       // If there's still auth data, create new token
-      if (currentAuth.github || currentAuth.telegram || currentAuth.civic) {
+      if (currentAuth.github || currentAuth.civic) {
         const newJwtToken = jwt.sign(
           currentAuth,
           process.env.JWT_SECRET || 'fallback-secret',

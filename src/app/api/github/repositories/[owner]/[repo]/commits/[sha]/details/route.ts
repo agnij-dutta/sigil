@@ -5,9 +5,12 @@ import { AuthToken } from '@/types/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { owner: string; repo: string; sha: string } }
+  { params }: { params: Promise<{ owner: string; repo: string; sha: string }> }
 ) {
   try {
+    // Await the params since they're now a Promise
+    const { owner, repo, sha } = await params;
+    
     // Verify authentication
     const authCookie = request.cookies.get('sigil_auth')?.value;
     if (!authCookie) {
@@ -33,7 +36,7 @@ export async function GET(
     const githubService = new GitHubDataService(decoded.github.accessToken);
 
     // Verify user has access to the repository
-    const permission = await githubService.getRepositoryPermission(params.owner, params.repo);
+    const permission = await githubService.getRepositoryPermission(owner, repo);
     if (!permission || permission.permission === 'none') {
       return NextResponse.json(
         { error: 'Access denied: You do not have access to this repository' },
@@ -43,14 +46,14 @@ export async function GET(
 
     // Get detailed commit information
     const commitDetails = await githubService.getCommitDetails(
-      params.owner,
-      params.repo,
-      params.sha
+      owner,
+      repo,
+      sha
     );
 
     return NextResponse.json({
-      repository: `${params.owner}/${params.repo}`,
-      sha: params.sha,
+      repository: `${owner}/${repo}`,
+      sha: sha,
       permission: permission.permission,
       ...commitDetails,
     });

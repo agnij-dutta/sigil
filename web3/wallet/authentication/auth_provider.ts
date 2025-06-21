@@ -1,3 +1,14 @@
+// Extend Window interface for MetaMask
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (request: { method: string; params?: any[] }) => Promise<any>;
+      on: (event: string, callback: (...args: any[]) => void) => void;
+      removeListener: (event: string, callback: (...args: any[]) => void) => void;
+    };
+  }
+}
+
 export interface WalletConnection {
   address: string;
   chainId: number;
@@ -83,7 +94,7 @@ export class WalletAuthProvider {
     } catch (error) {
       this.setState({
         isLoading: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
       throw error;
     }
@@ -112,7 +123,7 @@ export class WalletAuthProvider {
 
       return signature;
     } catch (error) {
-      throw new Error(`Failed to sign message: ${error.message}`);
+      throw new Error(`Failed to sign message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -134,7 +145,7 @@ export class WalletAuthProvider {
         } : null
       });
     } catch (error) {
-      throw new Error(`Failed to switch network: ${error.message}`);
+      throw new Error(`Failed to switch network: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
