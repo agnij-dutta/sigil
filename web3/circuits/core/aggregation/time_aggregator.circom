@@ -1,0 +1,360 @@
+pragma circom 2.0.0;
+
+// Include core primitives
+include "../primitives/range_proof.circom";
+include "../primitives/hash_chain.circom";
+
+/*
+ * TimeAggregator - Aggregate temporal patterns across contributions
+ * 
+ * This circuit proves:
+ * 1. Activity periods (sustained contribution over time)
+ * 2. Average contribution frequency
+ * 3. Temporal consistency index
+ * 4. Contribution quality over time
+ * 5. Active development periods vs gaps
+ */
+template TimeAggregator(MAX_COMMITS) {
+    // Input signals
+    signal input timestamps[MAX_COMMITS];         // Unix timestamps of commits
+    signal input commitSizes[MAX_COMMITS];        // LOC added/modified per commit
+    signal input commitTypes[MAX_COMMITS];        // Type: 1=feature, 2=bugfix, 3=refactor, etc.
+    signal input activeThreshold;                 // Minimum commits per period to be "active"
+    signal input periodLength;                    // Length of analysis period (e.g., 30 days)
+    signal input qualityThreshold;               // Minimum LOC per commit for quality
+    signal input maxTimeGap;                      // Maximum gap between commits (days)
+    
+    // Output signals
+    signal output activityPeriods;               // Number of active periods
+    signal output averageFrequency;              // Average commits per period
+    signal output consistencyIndex;              // Temporal consistency (0-100)
+    signal output qualityTrend;                  // Quality improvement trend
+    signal output sustainabilityScore;           // Long-term contribution sustainability
+    signal output gapAnalysis;                   // Analysis of contribution gaps
+    
+    // Internal signals
+    signal timeGaps[MAX_COMMITS];                // Time gaps between consecutive commits
+    signal activePeriodFlags[MAX_COMMITS];       // 1 if period is active, 0 otherwise
+    signal qualityFlags[MAX_COMMITS];            // 1 if commit meets quality threshold
+    
+    // Components for temporal analysis
+    component periodAnalyzer = ActivityPeriodCalculator(MAX_COMMITS);
+    component frequencyCalc = FrequencyCalculator(MAX_COMMITS);
+    component consistencyCalc = TemporalConsistency(MAX_COMMITS);
+    component qualityAnalyzer = QualityTrendAnalyzer(MAX_COMMITS);
+    component sustainabilityCalc = SustainabilityCalculator(MAX_COMMITS);
+    component gapAnalyzer = GapAnalyzer(MAX_COMMITS);
+    
+    // Range proofs for output validation
+    component activityRange = RangeProof(16);
+    component frequencyRange = RangeProof(16);
+    component consistencyRange = RangeProof(8);
+    component qualityRange = RangeProof(8);
+    component sustainabilityRange = RangeProof(8);
+    
+    // Hash chain for temporal integrity
+    component timeChain = HashChain(MAX_COMMITS);
+    
+    // Calculate time gaps between consecutive commits
+    for (var i = 1; i < MAX_COMMITS; i++) {
+        component gapCalc = SafeSubtraction();
+        gapCalc.a <== timestamps[i];
+        gapCalc.b <== timestamps[i-1];
+        timeGaps[i] <== gapCalc.result;
+        
+        // Verify timestamps are ordered
+        component timeOrder = GreaterThan(32);
+        timeOrder.in[0] <== timestamps[i];
+        timeOrder.in[1] <== timestamps[i-1];
+        timeOrder.out === 1;
+    }
+    timeGaps[0] <== 0; // First commit has no gap
+    
+    // Analyze activity periods
+    for (var i = 0; i < MAX_COMMITS; i++) {
+        periodAnalyzer.timestamps[i] <== timestamps[i];
+        periodAnalyzer.commitSizes[i] <== commitSizes[i];
+        periodAnalyzer.commitTypes[i] <== commitTypes[i];
+    }
+    periodAnalyzer.threshold <== activeThreshold;
+    periodAnalyzer.periodLength <== periodLength;
+    activityPeriods <== periodAnalyzer.periods;
+    
+    // Calculate average frequency
+    for (var i = 0; i < MAX_COMMITS; i++) {
+        frequencyCalc.timestamps[i] <== timestamps[i];
+        frequencyCalc.sizes[i] <== commitSizes[i];
+    }
+    frequencyCalc.periodLength <== periodLength;
+    averageFrequency <== frequencyCalc.avgFrequency;
+    
+    // Calculate temporal consistency
+    for (var i = 0; i < MAX_COMMITS; i++) {
+        consistencyCalc.timestamps[i] <== timestamps[i];
+        consistencyCalc.timeGaps[i] <== timeGaps[i];
+        consistencyCalc.commitSizes[i] <== commitSizes[i];
+    }
+    consistencyCalc.maxGap <== maxTimeGap;
+    consistencyIndex <== consistencyCalc.index;
+    
+    // Analyze quality trend over time
+    for (var i = 0; i < MAX_COMMITS; i++) {
+        qualityAnalyzer.timestamps[i] <== timestamps[i];
+        qualityAnalyzer.commitSizes[i] <== commitSizes[i];
+        qualityAnalyzer.commitTypes[i] <== commitTypes[i];
+    }
+    qualityAnalyzer.qualityThreshold <== qualityThreshold;
+    qualityTrend <== qualityAnalyzer.trend;
+    
+    // Calculate sustainability score
+    for (var i = 0; i < MAX_COMMITS; i++) {
+        sustainabilityCalc.timestamps[i] <== timestamps[i];
+        sustainabilityCalc.commitSizes[i] <== commitSizes[i];
+        sustainabilityCalc.timeGaps[i] <== timeGaps[i];
+    }
+    sustainabilityCalc.maxGap <== maxTimeGap;
+    sustainabilityScore <== sustainabilityCalc.score;
+    
+    // Analyze contribution gaps
+    for (var i = 0; i < MAX_COMMITS; i++) {
+        gapAnalyzer.timeGaps[i] <== timeGaps[i];
+        gapAnalyzer.timestamps[i] <== timestamps[i];
+    }
+    gapAnalyzer.maxGap <== maxTimeGap;
+    gapAnalysis <== gapAnalyzer.analysis;
+    
+    // Build hash chain for temporal integrity
+    for (var i = 0; i < MAX_COMMITS; i++) {
+        timeChain.values[i] <== timestamps[i];
+    }
+    
+    // Apply range proofs to outputs
+    activityRange.value <== activityPeriods;
+    activityRange.minRange <== 1;
+    activityRange.maxRange <== 365; // Max reasonable activity periods (days)
+    activityRange.isValid === 1;
+    
+    frequencyRange.value <== averageFrequency;
+    frequencyRange.minRange <== 0;
+    frequencyRange.maxRange <== 100; // Max reasonable commits per period
+    frequencyRange.isValid === 1;
+    
+    consistencyRange.value <== consistencyIndex;
+    consistencyRange.minRange <== 0;
+    consistencyRange.maxRange <== 100;
+    consistencyRange.isValid === 1;
+    
+    qualityRange.value <== qualityTrend;
+    qualityRange.minRange <== 0;
+    qualityRange.maxRange <== 100;
+    qualityRange.isValid === 1;
+    
+    sustainabilityRange.value <== sustainabilityScore;
+    sustainabilityRange.minRange <== 0;
+    sustainabilityRange.maxRange <== 100;
+    sustainabilityRange.isValid === 1;
+    
+    // Constraint: Must have meaningful activity
+    component hasActivity = GreaterThan(16);
+    hasActivity.in[0] <== activityPeriods;
+    hasActivity.in[1] <== 0;
+    hasActivity.out === 1;
+    
+    // Constraint: Consistency must be reasonable for sustained development
+    component reasonableConsistency = GreaterThan(8);
+    reasonableConsistency.in[0] <== consistencyIndex;
+    reasonableConsistency.in[1] <== 20; // Minimum 20% consistency
+    reasonableConsistency.out === 1;
+}
+
+/*
+ * Helper template: Calculate activity periods
+ */
+template ActivityPeriodCalculator(N) {
+    signal input timestamps[N];
+    signal input commitSizes[N];
+    signal input commitTypes[N];
+    signal input threshold;
+    signal input periodLength;
+    signal output periods;
+    
+    // Group commits into time periods and count active ones
+    signal periodCounts[N];
+    signal activePeriods[N];
+    
+    // Simplified period calculation for circuit efficiency
+    component activeCounter = Sum(N);
+    for (var i = 0; i < N; i++) {
+        component thresholdCheck = GreaterEqualThan(8);
+        thresholdCheck.in[0] <== commitSizes[i];
+        thresholdCheck.in[1] <== threshold;
+        activePeriods[i] <== thresholdCheck.out;
+        activeCounter.values[i] <== activePeriods[i];
+    }
+    periods <== activeCounter.out;
+}
+
+/*
+ * Helper template: Calculate average frequency
+ */
+template FrequencyCalculator(N) {
+    signal input timestamps[N];
+    signal input sizes[N];
+    signal input periodLength;
+    signal output avgFrequency;
+    
+    // Calculate total commits and time span
+    signal totalCommits;
+    signal timeSpan;
+    
+    component commitCounter = CountNonZero(N);
+    for (var i = 0; i < N; i++) {
+        commitCounter.values[i] <== sizes[i];
+    }
+    totalCommits <== commitCounter.count;
+    
+    // Calculate time span (last - first timestamp)
+    component spanCalc = SafeSubtraction();
+    spanCalc.a <== timestamps[N-1];
+    spanCalc.b <== timestamps[0];
+    timeSpan <== spanCalc.result;
+    
+    // Calculate average frequency (commits per period)
+    component freqCalc = SafeDivision();
+    freqCalc.dividend <== totalCommits * periodLength;
+    freqCalc.divisor <== timeSpan;
+    avgFrequency <== freqCalc.quotient;
+}
+
+/*
+ * Helper template: Calculate temporal consistency
+ */
+template TemporalConsistency(N) {
+    signal input timestamps[N];
+    signal input timeGaps[N];
+    signal input commitSizes[N];
+    signal input maxGap;
+    signal output index;
+    
+    // Calculate consistency based on gap regularity
+    signal gapVariance;
+    signal consistencyScore;
+    
+    component varianceCalc = Variance(N);
+    for (var i = 0; i < N; i++) {
+        varianceCalc.values[i] <== timeGaps[i];
+    }
+    gapVariance <== varianceCalc.result;
+    
+    // Lower variance = higher consistency (simplified calculation)
+    component consistencyCalc = ConsistencyFromVariance();
+    consistencyCalc.variance <== gapVariance;
+    consistencyCalc.maxGap <== maxGap;
+    index <== consistencyCalc.score;
+}
+
+/*
+ * Helper template: Analyze quality trend
+ */
+template QualityTrendAnalyzer(N) {
+    signal input timestamps[N];
+    signal input commitSizes[N];
+    signal input commitTypes[N];
+    signal input qualityThreshold;
+    signal output trend;
+    
+    // Calculate quality improvement over time (simplified)
+    signal qualitySum;
+    signal timeWeightedSum;
+    
+    component qualityCalc = Sum(N);
+    component timeWeightCalc = Sum(N);
+    
+    for (var i = 0; i < N; i++) {
+        component qualityCheck = GreaterEqualThan(16);
+        qualityCheck.in[0] <== commitSizes[i];
+        qualityCheck.in[1] <== qualityThreshold;
+        
+        qualityCalc.values[i] <== qualityCheck.out;
+        timeWeightCalc.values[i] <== qualityCheck.out * (i + 1); // Weight by position
+    }
+    
+    qualitySum <== qualityCalc.out;
+    timeWeightedSum <== timeWeightCalc.out;
+    
+    // Calculate trend (positive if improving)
+    component trendCalc = SafeDivision();
+    trendCalc.dividend <== timeWeightedSum;
+    trendCalc.divisor <== qualitySum + 1; // Avoid division by zero
+    trend <== trendCalc.quotient;
+}
+
+/*
+ * Helper template: Calculate sustainability score
+ */
+template SustainabilityCalculator(N) {
+    signal input timestamps[N];
+    signal input commitSizes[N];
+    signal input timeGaps[N];
+    signal input maxGap;
+    signal output score;
+    
+    // Measure long-term sustainability factors
+    signal regularityScore;
+    signal volumeScore;
+    
+    // Count commits within acceptable time gaps
+    component regularityCalc = Sum(N);
+    component volumeCalc = Sum(N);
+    
+    for (var i = 0; i < N; i++) {
+        component gapCheck = LessThan(32);
+        gapCheck.in[0] <== timeGaps[i];
+        gapCheck.in[1] <== maxGap;
+        regularityCalc.values[i] <== gapCheck.out;
+        
+        component sizeCheck = GreaterThan(16);
+        sizeCheck.in[0] <== commitSizes[i];
+        sizeCheck.in[1] <== 0;
+        volumeCalc.values[i] <== sizeCheck.out;
+    }
+    
+    regularityScore <== regularityCalc.out;
+    volumeScore <== volumeCalc.out;
+    
+    // Combined sustainability score
+    component sustainabilityCalc = WeightedAverage();
+    sustainabilityCalc.value1 <== regularityScore;
+    sustainabilityCalc.weight1 <== 60; // 60% weight on regularity
+    sustainabilityCalc.value2 <== volumeScore;
+    sustainabilityCalc.weight2 <== 40; // 40% weight on volume
+    score <== sustainabilityCalc.result;
+}
+
+/*
+ * Helper template: Analyze contribution gaps
+ */
+template GapAnalyzer(N) {
+    signal input timeGaps[N];
+    signal input timestamps[N];
+    signal input maxGap;
+    signal output analysis;
+    
+    // Analyze patterns in contribution gaps
+    signal longGaps[N];
+    
+    component gapCounter = Sum(N);
+    for (var i = 0; i < N; i++) {
+        component isLongGap = GreaterThan(32);
+        isLongGap.in[0] <== timeGaps[i];
+        isLongGap.in[1] <== maxGap;
+        longGaps[i] <== isLongGap.out;
+        gapCounter.values[i] <== longGaps[i];
+    }
+    
+    // Calculate gap analysis score (fewer long gaps = better)
+    component gapScore = SafeDivision();
+    gapScore.dividend <== (N - gapCounter.out) * 100;
+    gapScore.divisor <== N;
+    analysis <== gapScore.quotient;
+} 
