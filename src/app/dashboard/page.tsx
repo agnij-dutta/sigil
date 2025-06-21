@@ -64,7 +64,7 @@ export default function Dashboard() {
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [githubData, setGithubData] = useState<AuthToken['github'] | null>(null);
-  const [loadingGithub, setLoadingGithub] = useState(false);
+  const [, setLoadingGithub] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   useEffect(() => {

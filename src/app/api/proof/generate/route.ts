@@ -85,7 +85,7 @@ async function generateRepositoryCredentialProof(data: GitHubContributionData): 
     try {
       // Attempt to use real snarkjs proof generation
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 second timeout
       
       const snarkResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/snark/generate`, {
         method: 'POST',

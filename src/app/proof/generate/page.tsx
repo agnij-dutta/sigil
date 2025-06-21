@@ -231,7 +231,7 @@ export default function ProofGenerationPage() {
           collaborators = collabData.collaborators?.length || 1;
           console.log(`Real collaborators data: ${collaborators} collaborators`);
         }
-      } catch (collabError) {
+      } catch (error) {
         console.warn('Failed to fetch collaborators, using default value');
         collaborators = Math.floor(Math.random() * 3) + 1;
       }

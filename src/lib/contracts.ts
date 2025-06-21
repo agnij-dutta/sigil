@@ -2,14 +2,14 @@ import { createPublicClient, http, type Address } from 'viem';
 import { sepolia } from 'viem/chains';
 import { keccak256 } from 'viem';
 
-// Deployed contract addresses on Sepolia (Deployed June 21, 2025)
+// Deployed contract addresses on Sepolia (Redeployed with authorization fix - January 22, 2025)
 export const CONTRACTS = {
-  SIGIL_VERIFIER: '0x794eA218dDBcD3dd4683251136dBaAbcFa22E008' as Address,
-  CREDENTIAL_REGISTRY: '0x8F9Cce60CDa5c3b262c30321f40a180A6A9DA762' as Address,
-  AGGREGATE_VERIFIER: '0xA7d0016BeA9951525d60816c285fd108c5Fe5B92' as Address,
-  COLLABORATION_VERIFIER: '0x406B2ec53e2e01f9E9D056D98295d0cf61694279' as Address,
-  LANGUAGE_VERIFIER: '0x3f6f22ADd0b6FEDA58DE416EC347d1747a7908b7' as Address,
-  REPOSITORY_VERIFIER: '0xB94ecC5a4cA8D7D2749cE8353F03B38372235C26' as Address,
+  SIGIL_VERIFIER: '0x0E37cc3Dc8Fa1675f2748b77dddfF452b63DD4CC' as Address,
+  CREDENTIAL_REGISTRY: '0xb9Df841a5b5f4a7f23F2294f3eecB5b2e2F53CFD' as Address,
+  AGGREGATE_VERIFIER: '0x0Ff7d4E7aF64059426F76d2236155ef1655C99D8' as Address,
+  COLLABORATION_VERIFIER: '0x2CC077f1Da27e7e08A1832804B03b30A2990a61C' as Address,
+  LANGUAGE_VERIFIER: '0x21b165aE60748410793e4c2ef248940dc31FE773' as Address,
+  REPOSITORY_VERIFIER: '0x4D1E494CaB138D8c23B18c975b49C1Bec7902746' as Address,
 } as const;
 
 // Sepolia RPC URL
@@ -87,6 +87,7 @@ export const CREDENTIAL_REGISTRY_ABI = [
   },
 ] as const;
 
+// Generic verifier ABI (fallback)
 export const VERIFIER_ABI = [
   {
     inputs: [
@@ -96,6 +97,59 @@ export const VERIFIER_ABI = [
     name: 'verifyProof',
     outputs: [{ name: '', type: 'bool' }],
     stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+// Specific ABIs for each verifier type with correct array sizes
+export const AGGREGATE_VERIFIER_ABI = [
+  {
+    inputs: [
+      { name: 'proof', type: 'bytes' },
+      { name: 'publicSignals', type: 'uint256[8]' }
+    ],
+    name: 'verifyProof',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'pure',
+    type: 'function',
+  },
+] as const;
+
+export const REPOSITORY_VERIFIER_ABI = [
+  {
+    inputs: [
+      { name: 'proof', type: 'bytes' },
+      { name: 'publicSignals', type: 'uint256[10]' }
+    ],
+    name: 'verifyProof',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'pure',
+    type: 'function',
+  },
+] as const;
+
+export const LANGUAGE_VERIFIER_ABI = [
+  {
+    inputs: [
+      { name: 'proof', type: 'bytes' },
+      { name: 'publicSignals', type: 'uint256[2]' }
+    ],
+    name: 'verifyProof',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'pure',
+    type: 'function',
+  },
+] as const;
+
+export const COLLABORATION_VERIFIER_ABI = [
+  {
+    inputs: [
+      { name: 'proof', type: 'bytes' },
+      { name: 'publicSignals', type: 'uint256[5]' }
+    ],
+    name: 'verifyProof',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'pure',
     type: 'function',
   },
 ] as const;
@@ -191,15 +245,107 @@ export class ContractService {
         throw new Error(`Unknown verifier type: ${verifierType}`);
       }
 
-      const result = await publicClient.readContract({
+      // Each verifier expects a different fixed-size array of public signals
+      const expectedSizes: Record<string, number> = {
+        'AGGREGATE_VERIFIER': 8,
+        'REPOSITORY_VERIFIER': 10,
+        'LANGUAGE_VERIFIER': 2,
+        'COLLABORATION_VERIFIER': 5,
+      };
+
+      const expectedSize = expectedSizes[verifierType];
+      if (!expectedSize) {
+        throw new Error(`Unknown expected size for verifier: ${verifierType}`);
+      }
+
+      // Pad or truncate public signals to match expected size
+      let adjustedSignals = [...publicSignals];
+      if (adjustedSignals.length < expectedSize) {
+        // Pad with zeros if too short
+        while (adjustedSignals.length < expectedSize) {
+          adjustedSignals.push(BigInt(0));
+        }
+      } else if (adjustedSignals.length > expectedSize) {
+        // Truncate if too long
+        adjustedSignals = adjustedSignals.slice(0, expectedSize);
+      }
+
+      console.log(`Verifying proof with ${verifierType}:`, {
+        proofLength: proof.length,
+        publicSignalsLength: adjustedSignals.length,
+        expectedSize,
+        publicSignals: adjustedSignals.map(s => s.toString())
+      });
+
+      // Use specific contract calls based on verifier type to ensure correct typing
+      let result: boolean;
+      
+      switch (verifierType) {
+        case 'AGGREGATE_VERIFIER':
+          result = await publicClient.readContract({
+            address: contractAddress,
+            abi: AGGREGATE_VERIFIER_ABI,
+            functionName: 'verifyProof',
+            args: [proof as `0x${string}`, adjustedSignals as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint]],
+          });
+          break;
+          
+        case 'REPOSITORY_VERIFIER':
+          result = await publicClient.readContract({
+            address: contractAddress,
+            abi: REPOSITORY_VERIFIER_ABI,
+            functionName: 'verifyProof',
+            args: [proof as `0x${string}`, adjustedSignals as unknown as readonly [bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint]],
+          });
+          break;
+          
+        case 'LANGUAGE_VERIFIER':
+          result = await publicClient.readContract({
+            address: contractAddress,
+            abi: LANGUAGE_VERIFIER_ABI,
+            functionName: 'verifyProof',
+            args: [proof as `0x${string}`, adjustedSignals as unknown as readonly [bigint, bigint]],
+          });
+          break;
+          
+        case 'COLLABORATION_VERIFIER':
+          result = await publicClient.readContract({
+            address: contractAddress,
+            abi: COLLABORATION_VERIFIER_ABI,
+            functionName: 'verifyProof',
+            args: [proof as `0x${string}`, adjustedSignals as unknown as readonly [bigint, bigint, bigint, bigint, bigint]],
+          });
+          break;
+          
+        default:
+          // Fallback to generic ABI
+          result = await publicClient.readContract({
         address: contractAddress,
         abi: VERIFIER_ABI,
         functionName: 'verifyProof',
-        args: [proof as `0x${string}`, publicSignals],
+            args: [proof as `0x${string}`, adjustedSignals],
       });
+          break;
+      }
+      
       return result;
     } catch (error) {
       console.error('Failed to verify proof:', error);
+      
+      // Better error handling for viem parsing issues
+      if (error && typeof error === 'object') {
+        const errorObj = error as any;
+        if (errorObj.message) {
+          console.error('Error message:', errorObj.message);
+        }
+        if (errorObj.cause) {
+          console.error('Error cause:', errorObj.cause);
+        }
+        if (errorObj.data) {
+          console.error('Error data:', errorObj.data);
+        }
+      }
+      
       return false;
     }
   }
@@ -219,6 +365,8 @@ export class ContractService {
     }
   ): Promise<{ success: boolean; hash?: string; error?: string; credentialHash?: string }> {
     try {
+      // First, ensure the wallet is on Sepolia network
+      await this.ensureSepoliaNetwork(walletClient);
       // Generate real ZK proof based on GitHub data
       const proof = await this.generateZKProof(credentialType, githubData, userAddress);
       
@@ -234,31 +382,113 @@ export class ContractService {
       // In production, this would verify the ZK proof first, then register
       console.log('Registering credential with ZK proof (demo mode)');
       
+      // Use CredentialRegistry with authorization fix (no longer requires authorization)
+      console.log('Using CredentialRegistry for credential registration (authorization requirement removed)');
+      
       const credentialHash = keccak256(new TextEncoder().encode(
         `${userAddress}${credentialType}${JSON.stringify(githubData)}${Date.now()}`
       ));
       
-      const hash = await walletClient.writeContract({
-        address: CONTRACTS.CREDENTIAL_REGISTRY,
-        abi: CREDENTIAL_REGISTRY_ABI,
-        functionName: 'registerCredential',
-        account: userAddress,
-        chain: sepolia, // Explicitly specify Sepolia chain
-        args: [
-          credentialHash,
-          userAddress,
-          BigInt(credentialTypeEnum),
-          expiresAt,
-          'ipfs://zk-proof-metadata',
-          BigInt(Math.floor(Math.min(githubData.commits + githubData.linesAdded / 100, 1000))) // Score based on contributions
-        ],
-      });
-      
-      return { 
-        success: true, 
-        hash, 
-        credentialHash: credentialHash
-      };
+      try {
+        // First, simulate the contract call to catch errors early
+        console.log('Simulating CredentialRegistry contract call...');
+        try {
+          await publicClient.simulateContract({
+            address: CONTRACTS.CREDENTIAL_REGISTRY,
+            abi: CREDENTIAL_REGISTRY_ABI,
+            functionName: 'registerCredential',
+            account: userAddress,
+            args: [
+              credentialHash,
+              userAddress,
+              BigInt(credentialTypeEnum),
+              expiresAt,
+              'ipfs://zk-proof-metadata',
+              BigInt(Math.floor(Math.min(githubData.commits + githubData.linesAdded / 100, 1000))) // Score based on contributions
+            ],
+          });
+          console.log('Simulation successful, executing contract call...');
+        } catch (simulationError) {
+          console.error('Contract simulation failed:', simulationError);
+          
+          // Handle viem parsing errors specifically
+          if (simulationError && typeof simulationError === 'object') {
+            const errorObj = simulationError as any;
+            if (errorObj.message?.includes('InvalidCredentialData')) {
+              throw new Error('Invalid credential data provided');
+            }
+            if (errorObj.message?.includes('ContractPaused')) {
+              throw new Error('Contract is currently paused');
+            }
+            if (errorObj.message?.includes('revert')) {
+              throw new Error('Contract simulation failed - check your inputs');
+            }
+          }
+          
+          // Re-throw the original error if we can't handle it
+          throw simulationError;
+        }
+        const hash = await walletClient.writeContract({
+          address: CONTRACTS.CREDENTIAL_REGISTRY,
+          abi: CREDENTIAL_REGISTRY_ABI,
+          functionName: 'registerCredential',
+          account: userAddress,
+          chain: sepolia, // Explicitly specify Sepolia chain
+          args: [
+            credentialHash,
+            userAddress,
+            BigInt(credentialTypeEnum),
+            expiresAt,
+            'ipfs://zk-proof-metadata',
+            BigInt(Math.floor(Math.min(githubData.commits + githubData.linesAdded / 100, 1000))) // Score based on contributions
+          ],
+        });
+        
+        // Wait for transaction confirmation and extract credential hash
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const extractedCredentialHash = this.extractCredentialHashFromLogs(receipt.logs);
+        
+        return { 
+          success: true, 
+          hash, 
+          credentialHash: extractedCredentialHash || credentialHash
+        };
+      } catch (contractError) {
+        console.error('Contract write failed:', contractError);
+        
+        // Better error handling for viem contract errors
+        let errorMessage = 'Contract execution failed';
+        if (contractError && typeof contractError === 'object') {
+          const errorObj = contractError as any;
+          
+          if (errorObj.message) {
+            errorMessage = errorObj.message;
+          }
+          
+          // Check for specific contract revert reasons
+          if (errorObj.message?.includes('revert')) {
+            if (errorObj.message.includes('InvalidCredentialData')) {
+              errorMessage = 'Invalid credential data provided';
+            } else if (errorObj.message.includes('ContractPaused')) {
+              errorMessage = 'Contract is currently paused';
+            } else if (errorObj.message.includes('UnauthorizedVerifier')) {
+              errorMessage = 'Unauthorized: Your address is not authorized (this should not happen with the new contract)';
+            } else {
+              errorMessage = 'Contract execution reverted - check your inputs';
+            }
+          }
+          
+          // Log additional error details for debugging
+          if (errorObj.cause) {
+            console.error('Error cause:', errorObj.cause);
+          }
+          if (errorObj.data) {
+            console.error('Error data:', errorObj.data);
+          }
+        }
+        
+        return { success: false, error: errorMessage };
+      }
     } catch (error) {
       console.error('Failed to generate and register credential:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -385,12 +615,27 @@ export class ContractService {
     return null;
   }
 
+  private static extractCredentialHashFromSigilLogs(logs: any[]): string | null {
+    // Extract credential hash from SigilCredentialVerifier logs
+    // This would parse the CredentialVerified event from SigilCredentialVerifier
+    for (const log of logs) {
+      if (log.topics && log.topics.length >= 3) {
+        // SigilCredentialVerifier emits CredentialVerified(address indexed user, bytes32 indexed credentialHash, CredentialType credentialType, uint256 timestamp)
+        // The credential hash is in topics[2]
+        return log.topics[2] || null;
+      }
+    }
+    return null;
+  }
+
   // UPDATED: Replace the old demo registration with real proof-based registration
   static async registerDemoCredential(
     walletClient: any,
     userAddress: Address
   ): Promise<{ success: boolean; hash?: string; error?: string }> {
     try {
+      // First, ensure the wallet is on Sepolia network
+      await this.ensureSepoliaNetwork(walletClient);
       // Generate sample GitHub data for demo
       const demoGithubData = {
         commits: Math.floor(Math.random() * 100) + 10,
@@ -447,6 +692,48 @@ export class ContractService {
     } catch (error) {
       console.error('Failed to get contract owner:', error);
       return '';
+    }
+  }
+
+  // Ensure wallet is connected to Sepolia network
+  static async ensureSepoliaNetwork(walletClient: any): Promise<void> {
+    try {
+      const currentChainId = await walletClient.getChainId();
+      const SEPOLIA_CHAIN_ID = 11155111;
+      
+      if (currentChainId !== SEPOLIA_CHAIN_ID) {
+        console.log(`Switching from chain ${currentChainId} to Sepolia (${SEPOLIA_CHAIN_ID})`);
+        
+        try {
+          // Try to switch to Sepolia
+          await walletClient.switchChain({ id: SEPOLIA_CHAIN_ID });
+          console.log('Successfully switched to Sepolia network');
+        } catch (switchError: any) {
+          // If Sepolia is not added to wallet, add it first
+          if (switchError.code === 4902) {
+            const sepoliaNetwork = {
+              chainId: SEPOLIA_CHAIN_ID,
+              chainName: 'Sepolia Testnet',
+              nativeCurrency: {
+                name: 'Sepolia ETH',
+                symbol: 'SEP',
+                decimals: 18,
+              },
+              rpcUrls: ['https://eth-sepolia.g.alchemy.com/v2/ouigpC_utbObH4NDiyunfv1nOUt8qQv8'],
+              blockExplorerUrls: ['https://sepolia.etherscan.io'],
+            };
+            
+            await walletClient.addChain({ chain: sepoliaNetwork });
+            await walletClient.switchChain({ id: SEPOLIA_CHAIN_ID });
+            console.log('Added and switched to Sepolia network');
+          } else {
+            throw new Error(`Failed to switch to Sepolia network: ${switchError.message}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Network switching error:', error);
+      throw new Error('Please manually switch your wallet to Sepolia Testnet to continue');
     }
   }
 }

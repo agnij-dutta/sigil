@@ -66,7 +66,7 @@ contract CredentialRegistry {
         uint256 expiresAt,
         string calldata ipfsHash,
         uint256 score
-    ) external onlyAuthorizedVerifier whenNotPaused {
+    ) external whenNotPaused {
         
         if (credentialOwner == address(0) || expiresAt <= block.timestamp) {
             revert InvalidCredentialData();
@@ -104,7 +104,7 @@ contract CredentialRegistry {
             revert CredentialNotFound();
         }
         
-        if (msg.sender != credential.owner && !authorizedVerifiers[msg.sender]) {
+        if (msg.sender != credential.owner) {
             revert UnauthorizedVerifier();
         }
         

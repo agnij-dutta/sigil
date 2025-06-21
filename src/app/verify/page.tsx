@@ -23,7 +23,8 @@ import {
   Zap,
   ArrowRight,
   Eye,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Upload
 } from 'lucide-react';
 
 interface VerificationResult {
@@ -59,7 +60,7 @@ export default function VerifyPage() {
   const demoPublicSignals = '[1, 2, 3, 4, 5]';
 
   useEffect(() => {
-    // Pre-fill demo data for easier testing
+    // Pre-fill demo data for easier testing - only run once on mount
     if (!credentialHash) {
       setCredentialHash(demoCredentialHash);
     }
@@ -69,6 +70,7 @@ export default function VerifyPage() {
     if (!publicSignals) {
       setPublicSignals(demoPublicSignals);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleVerifyCredential = async () => {
@@ -101,43 +103,215 @@ export default function VerifyPage() {
   };
 
   const handleVerifyProof = async () => {
-    alert('ZK Proof verification is temporarily disabled. Please use credential hash verification instead.');
-    return;
-    
-    // Disabled for now - mock proof data causes contract reverts
-    // if (!proof.trim() || !publicSignals.trim()) {
-    //   alert('Please enter both proof and public signals');
-    //   return;
-    // }
+    if (!proof.trim() || !publicSignals.trim()) {
+      alert('Please enter both proof and public signals, or upload a proof JSON file');
+      return;
+    }
 
-    // setVerifying(true);
-    // setVerificationResult(null);
+    setVerifying(true);
+    setVerificationResult(null);
 
-    // try {
-    //   // Parse public signals
-    //   const signals = JSON.parse(publicSignals).map((s: string | number) => BigInt(s));
+    try {
+      // Parse public signals
+      let signals: bigint[];
+      try {
+        const parsedSignals = JSON.parse(publicSignals);
+        signals = Array.isArray(parsedSignals) 
+          ? parsedSignals.map((s: string | number) => BigInt(s))
+          : [BigInt(parsedSignals)];
+      } catch {
+        // If it's not JSON, try to parse as comma-separated values
+        signals = publicSignals.split(',').map(s => BigInt(s.trim()));
+      }
       
-    //   const isValid = await ContractService.verifyProof(
-    //     verifierType,
-    //     proof,
-    //     signals
-    //   );
+      const isValid = await ContractService.verifyProof(
+        verifierType,
+        proof,
+        signals
+      );
       
-    //   setVerificationResult({
-    //     isValid,
-    //     verifierType,
-    //     timestamp: Date.now()
-    //   });
-    // } catch (error) {
-    //   console.error('Proof verification failed:', error);
-    //   setVerificationResult({
-    //     isValid: false,
-    //     verifierType,
-    //     timestamp: Date.now()
-    //   });
-    // } finally {
-    //   setVerifying(false);
-    // }
+      setVerificationResult({
+        isValid,
+        verifierType,
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      console.error('Proof verification failed:', error);
+      setVerificationResult({
+        isValid: false,
+        verifierType,
+        timestamp: Date.now()
+      });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Handle JSON file upload
+  const handleProofFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const proofData = JSON.parse(content);
+        
+        console.log('Uploaded proof data:', proofData);
+        
+        // Handle different proof formats
+        if (proofData.proof && proofData.proof.proofValue && proofData.proof.credentialType) {
+          // Full Verifiable Credential format
+          console.log('Detected Verifiable Credential format');
+          
+          // Extract the ZK proof from the credential
+          const zkProof = proofData.proof.proofValue;
+          const publicSignals = proofData.proof.publicSignals;
+          const credentialType = proofData.proof.credentialType;
+          
+          // Convert Groth16 proof to bytes format for contract verification
+          const encodedProof = encodeGroth16Proof(zkProof);
+          
+          setProof(encodedProof);
+          setPublicSignals(JSON.stringify(publicSignals));
+          
+          // Set the appropriate verifier type based on credential type
+          const verifierMapping: Record<string, keyof typeof CONTRACTS> = {
+            'repository': 'REPOSITORY_VERIFIER',
+            'language': 'LANGUAGE_VERIFIER', 
+            'collaboration': 'COLLABORATION_VERIFIER',
+            'aggregate': 'AGGREGATE_VERIFIER'
+          };
+          
+          const mappedVerifier = verifierMapping[credentialType];
+          if (mappedVerifier) {
+            setVerifierType(mappedVerifier);
+          }
+          
+          alert(`Verifiable Credential loaded successfully! Type: ${credentialType}, Repository: ${proofData.credentialSubject?.repository || 'Unknown'}`);
+          
+        } else if (proofData.rawProof && proofData.rawProof.proof && proofData.rawProof.publicSignals) {
+          // Raw proof format from the credential
+          console.log('Detected raw proof format from credential');
+          
+          const zkProof = proofData.rawProof.proof;
+          const publicSignals = proofData.rawProof.publicSignals;
+          const credentialType = proofData.rawProof.credentialType;
+          
+          // Convert Groth16 proof to bytes format for contract verification
+          const encodedProof = encodeGroth16Proof(zkProof);
+          
+          setProof(encodedProof);
+          setPublicSignals(JSON.stringify(publicSignals));
+          
+          // Set the appropriate verifier type based on credential type
+          const verifierMapping: Record<string, keyof typeof CONTRACTS> = {
+            'repository': 'REPOSITORY_VERIFIER',
+            'language': 'LANGUAGE_VERIFIER', 
+            'collaboration': 'COLLABORATION_VERIFIER',
+            'aggregate': 'AGGREGATE_VERIFIER'
+          };
+          
+          const mappedVerifier = verifierMapping[credentialType];
+          if (mappedVerifier) {
+            setVerifierType(mappedVerifier);
+          }
+          
+          alert(`Raw proof loaded successfully! Type: ${credentialType}`);
+          
+        } else if (proofData.proof && proofData.publicSignals && proofData.credentialType) {
+          // Simple ZKProofData format
+          console.log('Detected simple ZKProofData format');
+          
+          // Convert Groth16 proof to bytes format for contract verification
+          const groth16Proof = proofData.proof;
+          const encodedProof = encodeGroth16Proof(groth16Proof);
+          
+          setProof(encodedProof);
+          setPublicSignals(JSON.stringify(proofData.publicSignals));
+          
+          // Set the appropriate verifier type based on credential type
+          const verifierMapping: Record<string, keyof typeof CONTRACTS> = {
+            'repository': 'REPOSITORY_VERIFIER',
+            'language': 'LANGUAGE_VERIFIER', 
+            'collaboration': 'COLLABORATION_VERIFIER',
+            'aggregate': 'AGGREGATE_VERIFIER'
+          };
+          
+          const mappedVerifier = verifierMapping[proofData.credentialType];
+          if (mappedVerifier) {
+            setVerifierType(mappedVerifier);
+          }
+          
+          alert(`Simple proof loaded successfully! Credential Type: ${proofData.credentialType}`);
+          
+        } else if (proofData.proof && proofData.publicSignals) {
+          // Standard snarkjs format
+          console.log('Detected snarkjs format');
+          setProof(JSON.stringify(proofData.proof));
+          setPublicSignals(JSON.stringify(proofData.publicSignals));
+          alert('Snarkjs proof loaded successfully!');
+          
+        } else if (proofData.pi_a && proofData.pi_b && proofData.pi_c) {
+          // Raw Groth16 format
+          console.log('Detected raw Groth16 format');
+          const formattedProof = {
+            a: proofData.pi_a.slice(0, 2),
+            b: [proofData.pi_b[0].slice(0, 2), proofData.pi_b[1].slice(0, 2)],
+            c: proofData.pi_c.slice(0, 2)
+          };
+          setProof(JSON.stringify(formattedProof));
+          setPublicSignals(JSON.stringify(proofData.publicSignals || []));
+          alert('Groth16 proof loaded successfully!');
+          
+        } else if (proofData.encodedProof && proofData.publicSignals) {
+          // Pre-encoded format
+          console.log('Detected pre-encoded format');
+          setProof(proofData.encodedProof);
+          setPublicSignals(JSON.stringify(proofData.publicSignals));
+          alert('Encoded proof loaded successfully!');
+          
+        } else {
+          console.error('Unsupported proof format:', Object.keys(proofData));
+          alert('Unsupported proof format. Expected Sigil proof format with: proof, publicSignals, credentialType');
+          return;
+        }
+        
+      } catch (error) {
+        console.error('Failed to parse proof file:', error);
+        alert('Invalid JSON file. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Helper function to encode Groth16 proof to bytes format for contract verification
+  const encodeGroth16Proof = (groth16Proof: {
+    a: [string, string];
+    b: [[string, string], [string, string]];
+    c: [string, string];
+  }): string => {
+    try {
+      // Convert Groth16 proof components to a single bytes string
+      // This is a simplified encoding - in production, use proper encoding
+      const a1 = groth16Proof.a[0];
+      const a2 = groth16Proof.a[1];
+      const b1 = groth16Proof.b[0][0];
+      const b2 = groth16Proof.b[0][1];
+      const b3 = groth16Proof.b[1][0];
+      const b4 = groth16Proof.b[1][1];
+      const c1 = groth16Proof.c[0];
+      const c2 = groth16Proof.c[1];
+      
+      // Concatenate all components (remove 0x prefixes except the first)
+      const encoded = a1 + a2.slice(2) + b1.slice(2) + b2.slice(2) + b3.slice(2) + b4.slice(2) + c1.slice(2) + c2.slice(2);
+      
+      return encoded;
+    } catch (error) {
+      console.error('Failed to encode Groth16 proof:', error);
+      return JSON.stringify(groth16Proof);
+    }
   };
 
   const handleRegisterCredential = async () => {
@@ -346,6 +520,30 @@ export default function VerifyPage() {
                           className="bg-black/30 border-white/20 text-white"
                           rows={3}
                         />
+                      </div>
+
+                      {/* File Upload Section */}
+                      <div className="border-t border-white/10 pt-4">
+                        <Label className="text-gray-300 mb-2 block">Or Upload Proof JSON File</Label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            accept=".json"
+                            onChange={handleProofFileUpload}
+                            className="hidden"
+                            id="proof-file-upload"
+                          />
+                          <label
+                            htmlFor="proof-file-upload"
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg cursor-pointer transition-colors"
+                          >
+                            <Upload className="w-4 h-4" />
+                            Choose JSON File
+                          </label>
+                          <span className="text-gray-400 text-sm">
+                            Supports snarkjs, Groth16, and Sigil proof formats
+                          </span>
+                        </div>
                       </div>
 
                       <Button

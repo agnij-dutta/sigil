@@ -135,7 +135,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<SnarkProo
     );
     
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('ZK proof generation timed out after 60 seconds')), 60000);
+      setTimeout(() => reject(new Error('ZK proof generation timed out after 30 seconds')), 30000);
     });
     
     const { proof: rawProof, publicSignals } = await Promise.race([proofPromise, timeoutPromise]);
