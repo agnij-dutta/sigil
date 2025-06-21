@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Header } from "@/components/ui/header";
+import { ProofExplainer } from '@/components/ui/proof-explainer';
 import { 
   Shield, 
   Upload, 
@@ -17,7 +18,8 @@ import {
   Loader2,
   Info,
   Eye,
-  Github
+  Github,
+  HelpCircle
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -42,6 +44,7 @@ export default function ProofVerification() {
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [inputMethod, setInputMethod] = useState<'paste' | 'upload'>('paste');
+  const [showExplainer, setShowExplainer] = useState(false);
 
   const verifyProof = async () => {
     if (!proofInput.trim()) return;
@@ -107,6 +110,17 @@ export default function ProofVerification() {
       setProofInput(content);
     };
     reader.readAsText(file);
+  };
+
+  const getProofType = () => {
+    if (!result?.details?.proofType) return "commit";
+    
+    const type = result.details.proofType.toLowerCase();
+    if (type.includes("commit")) return "commit";
+    if (type.includes("repo")) return "repository";
+    if (type.includes("collab")) return "collaboration";
+    if (type.includes("language")) return "language";
+    return "privacy";
   };
 
   return (
@@ -329,6 +343,18 @@ export default function ProofVerification() {
                         </div>
                       </div>
 
+                      <div className="border border-white/10 rounded-xl p-4">
+                        <h4 className="font-semibold text-white mb-3">Public Data</h4>
+                        <div className="space-y-2 text-sm">
+                          {result.details.publicSignals.map((signal, i) => (
+                            <div key={i} className="flex items-start">
+                              <span className="text-gray-400 whitespace-nowrap mr-2">Signal {i + 1}:</span>
+                              <span className="text-white font-mono text-xs break-all">{signal}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="flex gap-3">
                         <Button
                           variant="outline"
@@ -404,6 +430,28 @@ export default function ProofVerification() {
                   Public signals are checked to ensure the proof matches expected criteria.
                 </p>
               </div>
+            </div>
+
+            {/* Add Explainer Button */}
+            <div className="col-span-2 mt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowExplainer(!showExplainer)}
+                className="w-full border-white/10 text-white hover:bg-white/5 flex items-center justify-center gap-2"
+              >
+                <HelpCircle className="w-4 h-4" />
+                {showExplainer ? "Hide Explanation" : "Explain This Proof"}
+              </Button>
+              
+              {showExplainer && (
+                <div className="mt-4">
+                  <ProofExplainer
+                    proofType={getProofType()}
+                    context={`This proof was generated for the repository ${result.metadata?.repository} with a ${result.metadata?.privacyLevel} privacy level.`}
+                    publicSignals={result.details.publicSignals}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

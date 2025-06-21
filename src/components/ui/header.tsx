@@ -19,6 +19,7 @@ function Header() {
   const navigation = [
     { name: "Features", href: "#features" },
     { name: "How It Works", href: "#how-it-works" },
+    { name: "Explainer", href: "/explain" },
     { name: "Dashboard", href: "/dashboard" },
   ]
 

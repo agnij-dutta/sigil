@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useWallet } from '../../../../web3/wallet/hooks/useWallet';
+import { ProofExplainer } from '@/components/ui/proof-explainer';
 
 interface Repository {
   id: number;
@@ -73,6 +74,7 @@ export default function ProofGenerationPage() {
     includeCollaborators: false,
     timeRange: '1year'
   });
+  const [showExplainer, setShowExplainer] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && hasWallet) {
@@ -156,6 +158,8 @@ export default function ProofGenerationPage() {
         error: null,
         progress: 100
       });
+
+      setShowExplainer(true);
 
     } catch (error) {
       setGenerationState({
@@ -511,6 +515,21 @@ export default function ProofGenerationPage() {
                 </div>
               </div>
             </div>
+
+            {generationState.status === 'success' && showExplainer && (
+              <div className="mt-6">
+                <h3 className="text-lg font-semibold text-white mb-4">Understanding Your Proof</h3>
+                <ProofExplainer
+                  proofType={"commit"}
+                  context={`This proof was generated for the repository ${selectedRepo?.full_name} with privacy level ${options.privacyLevel}.`}
+                  publicSignals={[
+                    `Repository: ${selectedRepo?.full_name}`,
+                    `Timeframe: ${options.timeRange}`,
+                    `Privacy Level: ${options.privacyLevel}`
+                  ]}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
