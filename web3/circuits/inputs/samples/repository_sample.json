@@ -1,0 +1,419 @@
+{
+  "name": "sigil-zk-credentials",
+  "owner": "alice_dev",
+  "userAddress": "alice_dev",
+  "description": "Zero-knowledge credential system for GitHub contributions",
+  "url": "https://github.com/alice_dev/sigil-zk-credentials",
+  "createdAt": "2023-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T16:45:00Z",
+  "defaultBranch": "main",
+  "language": "TypeScript",
+  "size": 2048,
+  "stargazersCount": 127,
+  "forksCount": 23,
+  "openIssuesCount": 8,
+  "isPrivate": false,
+  "commits": [
+    {
+      "sha": "a1b2c3d4e5f6789012345678901234567890abcd",
+      "author": "alice_dev",
+      "committer": "alice_dev",
+      "message": "feat: implement differential privacy circuit",
+      "timestamp": "2024-01-15T14:30:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/a1b2c3d4e5f6789012345678901234567890abcd",
+      "additions": 145,
+      "deletions": 12,
+      "files": [
+        {
+          "filename": "circuits/privacy/differential_privacy.circom",
+          "status": "added",
+          "additions": 120,
+          "deletions": 0,
+          "changes": 120
+        },
+        {
+          "filename": "test/differential_privacy.test.ts",
+          "status": "added",
+          "additions": 25,
+          "deletions": 0,
+          "changes": 25
+        },
+        {
+          "filename": "README.md",
+          "status": "modified",
+          "additions": 0,
+          "deletions": 12,
+          "changes": 12
+        }
+      ]
+    },
+    {
+      "sha": "b2c3d4e5f6789012345678901234567890abcdef",
+      "author": "alice_dev",
+      "committer": "alice_dev",
+      "message": "feat: add k-anonymity circuit implementation",
+      "timestamp": "2024-01-14T09:15:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/b2c3d4e5f6789012345678901234567890abcdef",
+      "additions": 203,
+      "deletions": 5,
+      "files": [
+        {
+          "filename": "circuits/privacy/k_anonymity.circom",
+          "status": "added",
+          "additions": 185,
+          "deletions": 0,
+          "changes": 185
+        },
+        {
+          "filename": "test/k_anonymity.test.ts",
+          "status": "added",
+          "additions": 18,
+          "deletions": 0,
+          "changes": 18
+        },
+        {
+          "filename": "package.json",
+          "status": "modified",
+          "additions": 0,
+          "deletions": 5,
+          "changes": 5
+        }
+      ]
+    },
+    {
+      "sha": "c3d4e5f6789012345678901234567890abcdef12",
+      "author": "bob_contributor",
+      "committer": "bob_contributor",
+      "message": "fix: resolve merkle tree depth calculation",
+      "timestamp": "2024-01-13T16:20:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/c3d4e5f6789012345678901234567890abcdef12",
+      "additions": 15,
+      "deletions": 8,
+      "files": [
+        {
+          "filename": "circuits/core/merkle_tree.circom",
+          "status": "modified",
+          "additions": 12,
+          "deletions": 6,
+          "changes": 18
+        },
+        {
+          "filename": "test/merkle_tree.test.ts",
+          "status": "modified",
+          "additions": 3,
+          "deletions": 2,
+          "changes": 5
+        }
+      ]
+    },
+    {
+      "sha": "d4e5f6789012345678901234567890abcdef1234",
+      "author": "alice_dev",
+      "committer": "alice_dev",
+      "message": "refactor: optimize range proof circuit",
+      "timestamp": "2024-01-12T11:45:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/d4e5f6789012345678901234567890abcdef1234",
+      "additions": 67,
+      "deletions": 89,
+      "files": [
+        {
+          "filename": "circuits/core/range_proof.circom",
+          "status": "modified",
+          "additions": 45,
+          "deletions": 67,
+          "changes": 112
+        },
+        {
+          "filename": "test/range_proof.test.ts",
+          "status": "modified",
+          "additions": 22,
+          "deletions": 22,
+          "changes": 44
+        }
+      ]
+    },
+    {
+      "sha": "e5f6789012345678901234567890abcdef123456",
+      "author": "charlie_reviewer",
+      "committer": "charlie_reviewer",
+      "message": "docs: add comprehensive circuit documentation",
+      "timestamp": "2024-01-11T13:30:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/e5f6789012345678901234567890abcdef123456",
+      "additions": 234,
+      "deletions": 0,
+      "files": [
+        {
+          "filename": "docs/circuits.md",
+          "status": "added",
+          "additions": 156,
+          "deletions": 0,
+          "changes": 156
+        },
+        {
+          "filename": "docs/privacy.md",
+          "status": "added",
+          "additions": 78,
+          "deletions": 0,
+          "changes": 78
+        }
+      ]
+    },
+    {
+      "sha": "f6789012345678901234567890abcdef12345678",
+      "author": "alice_dev",
+      "committer": "alice_dev",
+      "message": "feat: implement signature verification circuit",
+      "timestamp": "2024-01-10T15:00:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/f6789012345678901234567890abcdef12345678",
+      "additions": 98,
+      "deletions": 3,
+      "files": [
+        {
+          "filename": "circuits/core/signature_verify.circom",
+          "status": "added",
+          "additions": 87,
+          "deletions": 0,
+          "changes": 87
+        },
+        {
+          "filename": "test/signature_verify.test.ts",
+          "status": "added",
+          "additions": 11,
+          "deletions": 0,
+          "changes": 11
+        },
+        {
+          "filename": "circuits/core/hash_chain.circom",
+          "status": "modified",
+          "additions": 0,
+          "deletions": 3,
+          "changes": 3
+        }
+      ]
+    },
+    {
+      "sha": "789012345678901234567890abcdef123456789a",
+      "author": "bob_contributor",
+      "committer": "bob_contributor",
+      "message": "test: add comprehensive test suite for aggregation circuits",
+      "timestamp": "2024-01-09T10:15:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/789012345678901234567890abcdef123456789a",
+      "additions": 156,
+      "deletions": 12,
+      "files": [
+        {
+          "filename": "test/aggregation/commit_aggregator.test.ts",
+          "status": "added",
+          "additions": 45,
+          "deletions": 0,
+          "changes": 45
+        },
+        {
+          "filename": "test/aggregation/repo_aggregator.test.ts",
+          "status": "added",
+          "additions": 38,
+          "deletions": 0,
+          "changes": 38
+        },
+        {
+          "filename": "test/aggregation/time_aggregator.test.ts",
+          "status": "added",
+          "additions": 42,
+          "deletions": 0,
+          "changes": 42
+        },
+        {
+          "filename": "test/aggregation/stats_aggregator.test.ts",
+          "status": "added",
+          "additions": 31,
+          "deletions": 0,
+          "changes": 31
+        },
+        {
+          "filename": "test/helper.ts",
+          "status": "modified",
+          "additions": 0,
+          "deletions": 12,
+          "changes": 12
+        }
+      ]
+    },
+    {
+      "sha": "89012345678901234567890abcdef123456789ab",
+      "author": "alice_dev",
+      "committer": "alice_dev",
+      "message": "feat: implement zero knowledge sets circuit",
+      "timestamp": "2024-01-08T14:45:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/89012345678901234567890abcdef123456789ab",
+      "additions": 287,
+      "deletions": 0,
+      "files": [
+        {
+          "filename": "circuits/privacy/zero_knowledge_sets.circom",
+          "status": "added",
+          "additions": 267,
+          "deletions": 0,
+          "changes": 267
+        },
+        {
+          "filename": "test/zero_knowledge_sets.test.ts",
+          "status": "added",
+          "additions": 20,
+          "deletions": 0,
+          "changes": 20
+        }
+      ]
+    },
+    {
+      "sha": "9012345678901234567890abcdef123456789abc",
+      "author": "diana_security",
+      "committer": "diana_security",
+      "message": "security: add input validation and sanitization",
+      "timestamp": "2024-01-07T09:30:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/9012345678901234567890abcdef123456789abc",
+      "additions": 178,
+      "deletions": 23,
+      "files": [
+        {
+          "filename": "src/validation/input_validator.ts",
+          "status": "added",
+          "additions": 134,
+          "deletions": 0,
+          "changes": 134
+        },
+        {
+          "filename": "src/validation/sanitizer.ts",
+          "status": "added",
+          "additions": 44,
+          "deletions": 0,
+          "changes": 44
+        },
+        {
+          "filename": "src/utils/security.ts",
+          "status": "modified",
+          "additions": 0,
+          "deletions": 23,
+          "changes": 23
+        }
+      ]
+    },
+    {
+      "sha": "012345678901234567890abcdef123456789abcd",
+      "author": "alice_dev",
+      "committer": "alice_dev",
+      "message": "feat: implement collaboration credential circuit",
+      "timestamp": "2024-01-06T16:20:00Z",
+      "url": "https://github.com/alice_dev/sigil-zk-credentials/commit/012345678901234567890abcdef123456789abcd",
+      "additions": 198,
+      "deletions": 7,
+      "files": [
+        {
+          "filename": "circuits/credentials/collaboration_credential.circom",
+          "status": "added",
+          "additions": 176,
+          "deletions": 0,
+          "changes": 176
+        },
+        {
+          "filename": "test/collaboration_credential.test.ts",
+          "status": "added",
+          "additions": 22,
+          "deletions": 0,
+          "changes": 22
+        },
+        {
+          "filename": "circuits/core/set_membership.circom",
+          "status": "modified",
+          "additions": 0,
+          "deletions": 7,
+          "changes": 7
+        }
+      ]
+    }
+  ],
+  "collaborators": [
+    {
+      "login": "alice_dev",
+      "id": 12345,
+      "type": "User",
+      "siteAdmin": false,
+      "contributions": 156,
+      "role": "owner"
+    },
+    {
+      "login": "bob_contributor",
+      "id": 23456,
+      "type": "User",
+      "siteAdmin": false,
+      "contributions": 45,
+      "role": "collaborator"
+    },
+    {
+      "login": "charlie_reviewer",
+      "id": 34567,
+      "type": "User",
+      "siteAdmin": false,
+      "contributions": 23,
+      "role": "collaborator"
+    },
+    {
+      "login": "diana_security",
+      "id": 45678,
+      "type": "User",
+      "siteAdmin": false,
+      "contributions": 18,
+      "role": "collaborator"
+    }
+  ],
+  "languages": {
+    "TypeScript": 1245678,
+    "Circom": 567890,
+    "JavaScript": 123456,
+    "Solidity": 89012,
+    "Shell": 12345
+  },
+  "topics": [
+    "zero-knowledge",
+    "privacy",
+    "blockchain",
+    "credentials",
+    "circom",
+    "zk-snarks"
+  ],
+  "license": {
+    "key": "mit",
+    "name": "MIT License",
+    "spdxId": "MIT"
+  },
+  "statistics": {
+    "totalCommits": 156,
+    "totalContributors": 4,
+    "totalLinesOfCode": 2038381,
+    "averageCommitsPerDay": 2.1,
+    "mostActiveDay": "Tuesday",
+    "mostActiveHour": 14,
+    "codeFrequency": [
+      { "week": "2024-01-08", "additions": 456, "deletions": 123 },
+      { "week": "2024-01-01", "additions": 678, "deletions": 89 },
+      { "week": "2023-12-25", "additions": 234, "deletions": 56 }
+    ],
+    "punchCard": {
+      "Monday": [0, 2, 5, 8, 12, 15, 18, 22, 25, 20, 15, 10, 8, 12, 16, 20, 18, 14, 10, 6, 3, 1, 0, 0],
+      "Tuesday": [0, 1, 3, 6, 10, 18, 25, 30, 35, 28, 22, 18, 15, 20, 25, 28, 24, 18, 12, 8, 4, 2, 1, 0],
+      "Wednesday": [0, 2, 4, 7, 11, 16, 22, 26, 30, 25, 20, 16, 14, 18, 22, 25, 21, 16, 11, 7, 4, 2, 1, 0],
+      "Thursday": [0, 1, 3, 5, 9, 14, 20, 24, 28, 23, 18, 15, 13, 17, 21, 24, 20, 15, 10, 6, 3, 1, 0, 0],
+      "Friday": [0, 2, 4, 6, 8, 12, 16, 20, 22, 18, 14, 12, 10, 14, 18, 20, 16, 12, 8, 5, 2, 1, 0, 0],
+      "Saturday": [0, 0, 1, 2, 3, 5, 8, 10, 12, 10, 8, 6, 5, 7, 9, 10, 8, 6, 4, 2, 1, 0, 0, 0],
+      "Sunday": [0, 0, 0, 1, 2, 3, 5, 6, 8, 6, 5, 4, 3, 4, 5, 6, 5, 4, 2, 1, 0, 0, 0, 0]
+    }
+  },
+  "metadata": {
+    "fetchedAt": "2024-01-15T17:00:00Z",
+    "apiVersion": "v4",
+    "rateLimitRemaining": 4987,
+    "dataQuality": "high",
+    "completeness": 0.95,
+    "privacyCompliant": true,
+    "anonymized": false
+  }
+}
