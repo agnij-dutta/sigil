@@ -1,8 +1,8 @@
 pragma circom 2.0.0;
 
 // Include core primitives
-include "../primitives/range_proof.circom";
-include "../primitives/hash_chain.circom";
+include "../primitives/range_proof_lib.circom";
+include "../primitives/hash_chain_lib.circom";
 
 /*
  * TimeAggregator - Aggregate temporal patterns across contributions
@@ -46,11 +46,11 @@ template TimeAggregator(MAX_COMMITS) {
     component gapAnalyzer = GapAnalyzer(MAX_COMMITS);
     
     // Range proofs for output validation
-    component activityRange = RangeProof(16);
-    component frequencyRange = RangeProof(16);
-    component consistencyRange = RangeProof(8);
-    component qualityRange = RangeProof(8);
-    component sustainabilityRange = RangeProof(8);
+    component activityRange = RangeProofCustom(16);
+    component frequencyRange = RangeProofCustom(16);
+    component consistencyRange = RangeProofCustom(8);
+    component qualityRange = RangeProofCustom(8);
+    component sustainabilityRange = RangeProofCustom(8);
     
     // Hash chain for temporal integrity
     component timeChain = HashChain(MAX_COMMITS);
@@ -130,29 +130,29 @@ template TimeAggregator(MAX_COMMITS) {
     
     // Apply range proofs to outputs
     activityRange.value <== activityPeriods;
-    activityRange.minRange <== 1;
-    activityRange.maxRange <== 365; // Max reasonable activity periods (days)
-    activityRange.isValid === 1;
+    activityRange.min <== 1;
+    activityRange.max <== 365; // Max reasonable activity periods (days)
+    activityRange.valid === 1;
     
     frequencyRange.value <== averageFrequency;
-    frequencyRange.minRange <== 0;
-    frequencyRange.maxRange <== 100; // Max reasonable commits per period
-    frequencyRange.isValid === 1;
+    frequencyRange.min <== 0;
+    frequencyRange.max <== 100; // Max reasonable commits per period
+    frequencyRange.valid === 1;
     
     consistencyRange.value <== consistencyIndex;
-    consistencyRange.minRange <== 0;
-    consistencyRange.maxRange <== 100;
-    consistencyRange.isValid === 1;
+    consistencyRange.min <== 0;
+    consistencyRange.max <== 100;
+    consistencyRange.valid === 1;
     
     qualityRange.value <== qualityTrend;
-    qualityRange.minRange <== 0;
-    qualityRange.maxRange <== 100;
-    qualityRange.isValid === 1;
+    qualityRange.min <== 0;
+    qualityRange.max <== 100;
+    qualityRange.valid === 1;
     
     sustainabilityRange.value <== sustainabilityScore;
-    sustainabilityRange.minRange <== 0;
-    sustainabilityRange.maxRange <== 100;
-    sustainabilityRange.isValid === 1;
+    sustainabilityRange.min <== 0;
+    sustainabilityRange.max <== 100;
+    sustainabilityRange.valid === 1;
     
     // Constraint: Must have meaningful activity
     component hasActivity = GreaterThan(16);
@@ -357,4 +357,6 @@ template GapAnalyzer(N) {
     gapScore.dividend <== (N - gapCounter.out) * 100;
     gapScore.divisor <== N;
     analysis <== gapScore.quotient;
-} 
+}
+
+component main = TimeAggregator(24); 

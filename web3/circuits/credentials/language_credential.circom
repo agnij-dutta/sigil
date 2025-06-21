@@ -258,16 +258,96 @@ template LanguageSorter(N) {
  */
 
 // For beginners (2-3 languages)
-template BeginnerLanguageCredential() = DynamicLanguageCredential(5);
+template BeginnerLanguageCredential() {
+    component cred = DynamicLanguageCredential(5);
+    cred.languageCount <== languageCount;
+    for (var i = 0; i < 5; i++) {
+        cred.languageHashes[i] <== languageHashes[i];
+        cred.languageMask[i] <== languageMask[i];
+        cred.languageUsage[i] <== languageUsage[i];
+        cred.usageProofs[i] <== usageProofs[i];
+    }
+    
+    signal input languageCount;
+    signal input languageHashes[5];
+    signal input languageMask[5];
+    signal input languageUsage[5];
+    signal input usageProofs[5];
+    signal output credentialHash;
+    signal output isValid;
+    
+    credentialHash <== cred.credentialHash;
+    isValid <== cred.isValid;
+}
 
 // For intermediate developers (4-8 languages)
-template IntermediateLanguageCredential() = DynamicLanguageCredential(10);
+template IntermediateLanguageCredential() {
+    component cred = DynamicLanguageCredential(10);
+    cred.languageCount <== languageCount;
+    for (var i = 0; i < 10; i++) {
+        cred.languageHashes[i] <== languageHashes[i];
+        cred.languageMask[i] <== languageMask[i];
+        cred.languageUsage[i] <== languageUsage[i];
+        cred.usageProofs[i] <== usageProofs[i];
+    }
+    
+    signal input languageCount;
+    signal input languageHashes[10];
+    signal input languageMask[10];
+    signal input languageUsage[10];
+    signal input usageProofs[10];
+    signal output credentialHash;
+    signal output isValid;
+    
+    credentialHash <== cred.credentialHash;
+    isValid <== cred.isValid;
+}
 
 // For senior developers (5-15 languages)
-template SeniorLanguageCredential() = DynamicLanguageCredential(20);
+template SeniorLanguageCredential() {
+    component cred = DynamicLanguageCredential(20);
+    cred.languageCount <== languageCount;
+    for (var i = 0; i < 20; i++) {
+        cred.languageHashes[i] <== languageHashes[i];
+        cred.languageMask[i] <== languageMask[i];
+        cred.languageUsage[i] <== languageUsage[i];
+        cred.usageProofs[i] <== usageProofs[i];
+    }
+    
+    signal input languageCount;
+    signal input languageHashes[20];
+    signal input languageMask[20];
+    signal input languageUsage[20];
+    signal input usageProofs[20];
+    signal output credentialHash;
+    signal output isValid;
+    
+    credentialHash <== cred.credentialHash;
+    isValid <== cred.isValid;
+}
 
 // For polyglot experts (10+ languages)
-template PolyglotLanguageCredential() = DynamicLanguageCredential(50);
+template PolyglotLanguageCredential() {
+    component cred = DynamicLanguageCredential(50);
+    cred.languageCount <== languageCount;
+    for (var i = 0; i < 50; i++) {
+        cred.languageHashes[i] <== languageHashes[i];
+        cred.languageMask[i] <== languageMask[i];
+        cred.languageUsage[i] <== languageUsage[i];
+        cred.usageProofs[i] <== usageProofs[i];
+    }
+    
+    signal input languageCount;
+    signal input languageHashes[50];
+    signal input languageMask[50];
+    signal input languageUsage[50];
+    signal input usageProofs[50];
+    signal output credentialHash;
+    signal output isValid;
+    
+    credentialHash <== cred.credentialHash;
+    isValid <== cred.isValid;
+}
 
 /*
  * Usage Examples:
@@ -290,4 +370,4 @@ template PolyglotLanguageCredential() = DynamicLanguageCredential(50);
  * polyglotCred.languageHashes[2] <== hash("TypeScript");
  * // ... up to 15 languages
  * // Set mask for first 15 slots to 1, rest to 0
- */ 
+ */ component main = LanguageCredential(10);

@@ -363,8 +363,12 @@ template PrivateSetUnionSize(maxSetSize, numHashFunctions) {
                          (unionSizeEstimate - expectedUnionSize) : 
                          (expectedUnionSize - unionSizeEstimate);
     
-    var accuracyPercentage = (estimationError < expectedUnionSize / 10) ? 90 : 
-                            (estimationError < expectedUnionSize / 5) ? 70 : 50;
+    var accuracyPercentage = 50;
+    if (estimationError < expectedUnionSize / 10) {
+        accuracyPercentage = 90;
+    } else if (estimationError < expectedUnionSize / 5) {
+        accuracyPercentage = 70;
+    }
     
     accuracyScore <== accuracyPercentage;
     estimationAccuracy <== accuracyScore;
@@ -381,7 +385,7 @@ template PrivateSetUnionSize(maxSetSize, numHashFunctions) {
     privacyLevel <== privacyScore;
     
     // Generate computation proof
-    component proofHasher = Poseidon(6);
+    component proofHasher = SimplePoseidon(6);
     proofHasher.inputs[0] <== setACommitment;
     proofHasher.inputs[1] <== setBCommitment;
     proofHasher.inputs[2] <== unionSizeEstimate;
@@ -519,14 +523,4 @@ template Num2Bits(n) {
     lc1 === in;
 }
 
-template Poseidon(nInputs) {
-    signal input inputs[nInputs];
-    signal output out;
-    
-    // Simplified Poseidon hash (in practice, use a proper implementation)
-    var sum = 0;
-    for (var i = 0; i < nInputs; i++) {
-        sum += inputs[i] * (i + 1);
-    }
-    out <== sum;
-}
+component main = ZKSetOperations(10, 5);

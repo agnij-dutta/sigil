@@ -188,16 +188,16 @@ template LeadershipCredential(
     rangeProofs[rangeProofIndex].minValue <== 0;
     rangeProofs[rangeProofIndex].maxValue <== 10;
 
-    // Calculate experience multipliers based on years of leadership
-    var experienceBonus = 1;
+    // Calculate experience multipliers based on years of leadership (using integers)
+    var experienceBonus = 100; // Base 100%
     if (yearsOfLeadership >= 5) {
-        experienceBonus += 0.3; // 30% bonus for 5+ years
+        experienceBonus += 30; // 30% bonus for 5+ years
     }
     if (yearsOfLeadership >= 10) {
-        experienceBonus += 0.2; // Additional 20% bonus for 10+ years
+        experienceBonus += 20; // Additional 20% bonus for 10+ years
     }
     if (yearsOfLeadership >= 15) {
-        experienceBonus += 0.1; // Additional 10% bonus for 15+ years
+        experienceBonus += 10; // Additional 10% bonus for 15+ years
     }
 
     // Calculate weighted scores for each leadership area
@@ -247,19 +247,19 @@ template LeadershipCredential(
 
     // Calculate leadership components (0-100 scale) with experience multipliers
     leadershipComponents[0] <== (totalMentoringActivities > 0) ? 
-        ((mentoringSum * 100 * experienceBonus) / (totalMentoringActivities * 10)) : 0;
+        ((mentoringSum * experienceBonus) / (totalMentoringActivities * 10)) : 0;
     leadershipComponents[1] <== (totalArchDecisions > 0) ? 
-        ((archDecisionSum * 100 * experienceBonus) / (totalArchDecisions * 10)) : 0;
+        ((archDecisionSum * experienceBonus) / (totalArchDecisions * 10)) : 0;
     leadershipComponents[2] <== (totalCodeReviews > 0) ? 
-        ((codeReviewSum * 100 * experienceBonus) / (totalCodeReviews * 10)) : 0;
+        ((codeReviewSum * experienceBonus) / (totalCodeReviews * 10)) : 0;
     leadershipComponents[3] <== (totalProjectsLed > 0) ? 
-        ((projectSum * 100 * experienceBonus) / (totalProjectsLed * 10)) : 0;
+        ((projectSum * experienceBonus) / (totalProjectsLed * 10)) : 0;
     leadershipComponents[4] <== (totalTeamInteractions > 0) ? 
-        ((teamInteractionSum * 100 * experienceBonus) / (totalTeamInteractions * 10)) : 0;
+        ((teamInteractionSum * experienceBonus) / (totalTeamInteractions * 10)) : 0;
     leadershipComponents[5] <== (totalInnovations > 0) ? 
-        ((innovationSum * 100 * experienceBonus) / (totalInnovations * 10)) : 0;
+        ((innovationSum * experienceBonus) / (totalInnovations * 10)) : 0;
     leadershipComponents[6] <== (totalCommunityContributions > 0) ? 
-        ((communitySum * 100 * experienceBonus) / (totalCommunityContributions * 10)) : 0;
+        ((communitySum * experienceBonus) / (totalCommunityContributions * 10)) : 0;
 
     // Set individual leadership scores
     mentoringScore <== leadershipComponents[0];
@@ -378,4 +378,4 @@ template LeadershipCredential(
     experienceThresholdRange.value <== experienceThreshold;
     experienceThresholdRange.minValue <== 0;
     experienceThresholdRange.maxValue <== 30;
-} 
+} component main = LeadershipCredential(10, 5, 5, 5, 5, 5, 5);

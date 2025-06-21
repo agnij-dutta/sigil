@@ -247,4 +247,4 @@ template NonOwnershipProof() {
 }
 
 // Main component - parameterized for different repository sizes
-component main = RepositoryCredential(100, 20, 50); 
+component main = RepositoryCredential(100, 20, 50);

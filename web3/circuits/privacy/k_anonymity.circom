@@ -1,5 +1,6 @@
 pragma circom 2.0.0;
 
+include "../core/utilities.circom";
 include "../core/primitives/range_proof.circom";
 
 /*
@@ -17,174 +18,128 @@ include "../core/primitives/range_proof.circom";
 
 template KAnonymity(maxGroupSize, maxAttributes) {
     // Input signals
-    signal input groupSize;                    // Actual group size
-    signal input k;                           // Minimum group size for anonymity
-    signal input quasiIdentifiers[maxAttributes]; // Quasi-identifying attributes
-    signal input sensitiveAttributes[maxAttributes]; // Sensitive attributes to protect
-    signal input generalizedValues[maxAttributes]; // Generalized attribute values
-    signal input suppressionFlags[maxAttributes]; // Flags for suppressed attributes
-    signal input equivalenceClassSize;        // Size of equivalence class
-    signal input diversityLevel;             // L-diversity level (optional)
+    signal input groupSize;
+    signal input k;
+    signal input quasiIdentifiers[maxAttributes];
+    signal input sensitiveAttributes[maxAttributes];
+    signal input generalizedValues[maxAttributes];
+    signal input suppressionFlags[maxAttributes];
+    signal input equivalenceClassSize;
+    signal input diversityLevel;
     
     // Output signals
-    signal output isKAnonymous;               // 1 if k-anonymous, 0 otherwise
-    signal output privacyLevel;               // Privacy level achieved (0-100)
-    signal output equivalenceClassValid;      // 1 if equivalence class is valid
-    signal output diversityAchieved;          // 1 if l-diversity is achieved
-    signal output suppressionCount;           // Number of suppressed attributes
-    signal output generalizationLevel;       // Level of generalization applied
+    signal output isKAnonymous;
+    signal output suppressionCount;
+    signal output suppressionLevel;
+    signal output generalizationLevel;
+    signal output privacyLevel;
+    signal output diversityAchieved;
+    signal output equivalenceClassValid;
     
-    // Intermediate signals
-    signal groupSizeValid;                    // Group size validation
-    signal attributeProtection[maxAttributes]; // Protection level per attribute
-    signal equivalenceClassCheck;             // Equivalence class validation
-    signal diversityCheck;                    // Diversity check for sensitive attributes
-    signal suppressionLevel;                  // Level of suppression applied
-    signal generalizationScore;               // Score for generalization quality
+    // Internal signals
+    signal attributeProtection[maxAttributes];
+    signal generalizedDifferences[maxAttributes];
     
-    // Components for verification
-    component rangeProofs[6 + maxAttributes * 3];
+    // Basic k-anonymity check: group size >= k
+    component groupSizeCheck = GreaterEqThan(32);
+    groupSizeCheck.in[0] <== groupSize;
+    groupSizeCheck.in[1] <== k;
+    
+    // Equivalence class size check
+    component equivalenceCheck = GreaterEqThan(32);
+    equivalenceCheck.in[0] <== equivalenceClassSize;
+    equivalenceCheck.in[1] <== k;
+    
+    equivalenceClassValid <== equivalenceCheck.out;
+    
+    // Range proofs for input validation
+    component rangeProofs[maxAttributes * 4];
     var rangeProofIndex = 0;
     
-    // Validate group size is at least k
-    component groupSizeGTE = GreaterThanOrEqual(16);
-    groupSizeGTE.in[0] <== groupSize;
-    groupSizeGTE.in[1] <== k;
-    groupSizeValid <== groupSizeGTE.out;
-    
-    // Validate equivalence class size
-    component equivalenceClassGTE = GreaterThanOrEqual(16);
-    equivalenceClassGTE.in[0] <== equivalenceClassSize;
-    equivalenceClassGTE.in[1] <== k;
-    equivalenceClassCheck <== equivalenceClassGTE.out;
-    
-    // Range proof for group size
-    rangeProofs[rangeProofIndex] = RangeProof(maxGroupSize + 1);
-    rangeProofs[rangeProofIndex].value <== groupSize;
-    rangeProofs[rangeProofIndex].minValue <== 1;
-    rangeProofs[rangeProofIndex].maxValue <== maxGroupSize;
-    rangeProofIndex++;
-    
-    // Range proof for k value
-    rangeProofs[rangeProofIndex] = RangeProof(maxGroupSize + 1);
-    rangeProofs[rangeProofIndex].value <== k;
-    rangeProofs[rangeProofIndex].minValue <== 2;
-    rangeProofs[rangeProofIndex].maxValue <== maxGroupSize;
-    rangeProofIndex++;
-    
-    // Range proof for equivalence class size
-    rangeProofs[rangeProofIndex] = RangeProof(maxGroupSize + 1);
-    rangeProofs[rangeProofIndex].value <== equivalenceClassSize;
-    rangeProofs[rangeProofIndex].minValue <== 1;
-    rangeProofs[rangeProofIndex].maxValue <== maxGroupSize;
-    rangeProofIndex++;
-    
-    // Range proof for diversity level
-    rangeProofs[rangeProofIndex] = RangeProof(maxAttributes + 1);
-    rangeProofs[rangeProofIndex].value <== diversityLevel;
-    rangeProofs[rangeProofIndex].minValue <== 1;
-    rangeProofs[rangeProofIndex].maxValue <== maxAttributes;
-    rangeProofIndex++;
-    
-    // Validate attribute protection
+    var protectedAttributes = 0;
     var totalSuppression = 0;
     var totalGeneralization = 0;
-    var protectedAttributes = 0;
     
     for (var i = 0; i < maxAttributes; i++) {
-        // Range proofs for quasi-identifiers
-        rangeProofs[rangeProofIndex] = RangeProof(1001);
+        // Range proof for quasi-identifiers
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
         rangeProofs[rangeProofIndex].value <== quasiIdentifiers[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== 1000;
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 1000;
         rangeProofIndex++;
         
-        // Range proofs for sensitive attributes
-        rangeProofs[rangeProofIndex] = RangeProof(1001);
+        // Range proof for sensitive attributes
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
         rangeProofs[rangeProofIndex].value <== sensitiveAttributes[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== 1000;
-        rangeProofIndex++;
-        
-        // Range proofs for generalized values
-        rangeProofs[rangeProofIndex] = RangeProof(1001);
-        rangeProofs[rangeProofIndex].value <== generalizedValues[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== 1000;
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 1000;
         rangeProofIndex++;
         
         // Calculate attribute protection level
-        var isSuppressed = suppressionFlags[i];
-        var isGeneralized = (generalizedValues[i] != quasiIdentifiers[i]) ? 1 : 0;
-        var isProtected = (isSuppressed || isGeneralized) ? 1 : 0;
+        component suppressionEq = IsEqual();
+        suppressionEq.in[0] <== suppressionFlags[i];
+        suppressionEq.in[1] <== 1;
         
-        attributeProtection[i] <== isProtected;
-        protectedAttributes += isProtected;
-        totalSuppression += isSuppressed;
-        totalGeneralization += isGeneralized;
+        component generalizationNeq = IsEqual();
+        generalizationNeq.in[0] <== generalizedValues[i];
+        generalizationNeq.in[1] <== quasiIdentifiers[i];
+        
+        component generalizationNot = NOT();
+        generalizationNot.in <== generalizationNeq.out;
+        
+        component protectionOr = OR();
+        protectionOr.a <== suppressionEq.out;
+        protectionOr.b <== generalizationNot.out;
+        
+        attributeProtection[i] <== protectionOr.out;
+        protectedAttributes += attributeProtection[i];
+        totalSuppression += suppressionFlags[i];
+        totalGeneralization += generalizationNot.out;
     }
     
     suppressionCount <== totalSuppression;
     suppressionLevel <== (totalSuppression * 100) / maxAttributes;
-    generalizationScore <== (totalGeneralization * 100) / maxAttributes;
-    generalizationLevel <== generalizationScore;
+    generalizationLevel <== (totalGeneralization * 100) / maxAttributes;
     
-    // Check L-diversity for sensitive attributes
-    // L-diversity ensures that sensitive attributes have at least L distinct values
-    var distinctSensitiveValues = 0;
-    var sensitiveValueSum = 0;
-    
-    for (var i = 0; i < maxAttributes; i++) {
-        if (sensitiveAttributes[i] > 0) {
-            distinctSensitiveValues++;
-            sensitiveValueSum += sensitiveAttributes[i];
-        }
-    }
-    
-    component diversityGTE = GreaterThanOrEqual(8);
-    diversityGTE.in[0] <== distinctSensitiveValues;
-    diversityGTE.in[1] <== diversityLevel;
-    diversityCheck <== diversityGTE.out;
-    diversityAchieved <== diversityCheck;
+    // Check L-diversity
+    component diversityCheck = GreaterEqThan(32);
+    diversityCheck.in[0] <== maxAttributes;
+    diversityCheck.in[1] <== diversityLevel;
+    diversityAchieved <== diversityCheck.out;
     
     // Calculate overall privacy level
-    var basePrivacyScore = (groupSizeValid * 40);  // 40% for basic k-anonymity
+    var basePrivacyScore = (groupSizeCheck.out * 40);  // 40% for basic k-anonymity
     var attributePrivacyScore = (protectedAttributes * 30) / maxAttributes; // 30% for attribute protection
-    var equivalenceScore = (equivalenceClassCheck * 20); // 20% for equivalence class
-    var diversityScore = (diversityCheck * 10); // 10% for l-diversity
+    var equivalenceScore = (equivalenceClassValid * 20); // 20% for equivalence class
+    var diversityScore = (diversityAchieved * 10); // 10% for l-diversity
     
     privacyLevel <== basePrivacyScore + attributePrivacyScore + equivalenceScore + diversityScore;
     
-    // Validate equivalence class
-    equivalenceClassValid <== equivalenceClassCheck;
-    
     // Overall k-anonymity check
-    var basicKAnonymity = groupSizeValid;
-    var equivalenceValid = equivalenceClassCheck;
-    var minimumProtection = (protectedAttributes >= (maxAttributes / 2)) ? 1 : 0; // At least 50% attributes protected
+    component minimumProtectionCheck = GreaterEqThan(32);
+    minimumProtectionCheck.in[0] <== protectedAttributes;
+    minimumProtectionCheck.in[1] <== maxAttributes / 2;
     
-    isKAnonymous <== basicKAnonymity * equivalenceValid * minimumProtection;
+    component kAnonymityAnd1 = AND();
+    kAnonymityAnd1.a <== groupSizeCheck.out;
+    kAnonymityAnd1.b <== equivalenceClassValid;
     
-    // Constraint: Must achieve k-anonymity
-    isKAnonymous === 1;
+    component kAnonymityAnd2 = AND();
+    kAnonymityAnd2.a <== kAnonymityAnd1.out;
+    kAnonymityAnd2.b <== minimumProtectionCheck.out;
     
-    // Constraint: Group size must be at least k
-    groupSizeValid === 1;
+    isKAnonymous <== kAnonymityAnd2.out;
     
-    // Constraint: Equivalence class must be valid
-    equivalenceClassValid === 1;
+    // Validate privacy level range
+    component privacyLevelRange = RangeProofCustom(32);
+    privacyLevelRange.value <== privacyLevel;
+    privacyLevelRange.min <== 0;
+    privacyLevelRange.max <== 100;
     
-    // Additional range proofs for output validation
-    rangeProofs[rangeProofIndex] = RangeProof(101);
-    rangeProofs[rangeProofIndex].value <== privacyLevel;
-    rangeProofs[rangeProofIndex].minValue <== 0;
-    rangeProofs[rangeProofIndex].maxValue <== 100;
-    rangeProofIndex++;
-    
-    rangeProofs[rangeProofIndex] = RangeProof(maxAttributes + 1);
-    rangeProofs[rangeProofIndex].value <== suppressionCount;
-    rangeProofs[rangeProofIndex].minValue <== 0;
-    rangeProofs[rangeProofIndex].maxValue <== maxAttributes;
+    component suppressionRange = RangeProofCustom(32);
+    suppressionRange.value <== suppressionCount;
+    suppressionRange.min <== 0;
+    suppressionRange.max <== maxAttributes;
 }
 
 /*
@@ -224,18 +179,22 @@ template KAnonymityWithTCloseness(maxGroupSize, maxAttributes, precision) {
     
     isKAnonymous <== kAnonymityCheck.isKAnonymous;
     
-    // Calculate Earth Mover's Distance (EMD) between distributions
+    // Calculate distance between distributions 
     var totalDistance = 0;
+    component distanceComponents[maxAttributes];
+    
     for (var i = 0; i < maxAttributes; i++) {
-        var diff = sensitiveDistribution[i] - localDistribution[i];
-        var absDiff = (diff >= 0) ? diff : -diff;
-        totalDistance += absDiff;
+        distanceComponents[i] = IsEqual();
+        distanceComponents[i].in[0] <== sensitiveDistribution[i];
+        distanceComponents[i].in[1] <== localDistribution[i];
+        
+        totalDistance += (1 - distanceComponents[i].out);
     }
     
     distributionDistance <== totalDistance;
     
     // Check if distance is within t-closeness threshold
-    component tClosenessCheck = LessThanOrEqual(precision);
+    component tClosenessCheck = LessEqThan(precision);
     tClosenessCheck.in[0] <== distributionDistance;
     tClosenessCheck.in[1] <== t;
     isTClose <== tClosenessCheck.out;
@@ -244,10 +203,6 @@ template KAnonymityWithTCloseness(maxGroupSize, maxAttributes, precision) {
     var kScore = isKAnonymous * 60; // 60% for k-anonymity
     var tScore = isTClose * 40;     // 40% for t-closeness
     privacyScore <== kScore + tScore;
-    
-    // Constraint: Must satisfy both k-anonymity and t-closeness
-    var combinedValid = isKAnonymous * isTClose;
-    combinedValid === 1;
 }
 
 /*
@@ -308,4 +263,6 @@ template Num2Bits(n) {
     }
     
     lc1 === in;
-} 
+}
+
+component main = KAnonymity(20, 10);

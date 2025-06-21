@@ -1,8 +1,8 @@
 pragma circom 2.0.0;
 
 // Include core primitives
-include "../primitives/range_proof.circom";
-include "../primitives/hash_chain.circom";
+include "../primitives/range_proof_lib.circom";
+include "../primitives/hash_chain_lib.circom";
 
 /*
  * StatsAggregator - Aggregate statistical measures with privacy preservation
@@ -62,17 +62,17 @@ template StatsAggregator(N) {
     
     // Validate input ranges
     for (var i = 0; i < N; i++) {
-        valueRanges[i] = RangeProof(32);
+        valueRanges[i] = RangeProofCustom(32);
         valueRanges[i].value <== values[i];
-        valueRanges[i].minRange <== minValue;
-        valueRanges[i].maxRange <== maxValue;
-        valueRanges[i].isValid === 1;
+        valueRanges[i].min <== minValue;
+        valueRanges[i].max <== maxValue;
+        valueRanges[i].valid === 1;
         
-        weightRanges[i] = RangeProof(16);
+        weightRanges[i] = RangeProofCustom(16);
         weightRanges[i].value <== weights[i];
-        weightRanges[i].minRange <== 0;
-        weightRanges[i].maxRange <== 1000; // Max reasonable weight
-        weightRanges[i].isValid === 1;
+        weightRanges[i].min <== 0;
+        weightRanges[i].max <== 1000; // Max reasonable weight
+        weightRanges[i].valid === 1;
     }
     
     // Calculate weighted values and total weight
@@ -186,17 +186,17 @@ template StatsAggregator(N) {
     }
     
     // Output validation constraints
-    component meanRange = RangeProof(32);
+    component meanRange = RangeProofCustom(32);
     meanRange.value <== mean;
-    meanRange.minRange <== minValue;
-    meanRange.maxRange <== maxValue;
-    meanRange.isValid === 1;
+    meanRange.min <== minValue;
+    meanRange.max <== maxValue;
+    meanRange.valid === 1;
     
-    component varianceRange = RangeProof(32);
+    component varianceRange = RangeProofCustom(32);
     varianceRange.value <== variance;
-    varianceRange.minRange <== 0;
-    varianceRange.maxRange <== (maxValue - minValue) * (maxValue - minValue);
-    varianceRange.isValid === 1;
+    varianceRange.min <== 0;
+    varianceRange.max <== (maxValue - minValue) * (maxValue - minValue);
+    varianceRange.valid === 1;
     
     // Constraint: Total weight must be positive
     component positiveWeight = GreaterThan(32);
@@ -439,4 +439,6 @@ template DifferentialPrivacy(N) {
     noiseCount.epsilon <== epsilon;
     noiseCount.sensitivity <== 1;
     noisyCount <== trueCount + noiseCount.noise;
-} 
+}
+
+component main = StatsAggregator(10); 

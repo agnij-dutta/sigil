@@ -6,6 +6,8 @@ include "circomlib/circuits/poseidon.circom";
 /*
  * HashChain verifies a chain of hash computations
  * Used for proving sequential operations without revealing intermediates
+ * 
+ * Library version - no main component for use in other circuits
  */
 template HashChain(n) {
     signal input startHash;
@@ -32,6 +34,4 @@ template HashChain(n) {
     isValid <== finalCheck.out;
 }
 
-// IsEqual and IsZero templates are now imported from utilities.circom
-
-component main = HashChain(10); 
+// No main component - this is a library circuit 

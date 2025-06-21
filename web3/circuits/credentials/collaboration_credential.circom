@@ -316,4 +316,4 @@ template CollaborationValidator() {
     and4.b <== diversityValid;
     
     allValid <== and4.out;
-} 
+} component main = CollaborationCredential(10, 5);

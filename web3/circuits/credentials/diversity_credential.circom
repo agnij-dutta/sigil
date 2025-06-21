@@ -370,3 +370,5 @@ template DiversityCredential(
     depthThresholdRange.minValue <== 0;
     depthThresholdRange.maxValue <== 100;
 }
+
+component main = DiversityCredential(10);

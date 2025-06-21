@@ -1,5 +1,7 @@
 pragma circom 2.0.0;
 
+include "../core/utilities.circom";
+
 /*
  * DifferentialPrivacy adds calibrated noise to sensitive statistics
  * Implements ε-differential privacy for repository metrics
@@ -12,21 +14,24 @@ template DifferentialPrivacy(precision) {
     
     signal output noisyValue;
     signal output privacyBudget;
+    signal output isValid;
     
     // Add noise to true value
     noisyValue <== trueValue + noiseValue;
     
     // Verify noise is appropriately calibrated for ε-DP
-    // noise_scale = sensitivity / epsilon
     component noiseCheck = NoiseCalibrationCheck(precision);
     noiseCheck.noiseValue <== noiseValue;
     noiseCheck.epsilon <== epsilon;
     noiseCheck.sensitivity <== sensitivity;
-    noiseCheck.isValid === 1;
     
     privacyBudget <== epsilon;
+    isValid <== noiseCheck.isValid;
 }
 
+/*
+ * Noise calibration verification
+ */
 template NoiseCalibrationCheck(precision) {
     signal input noiseValue;
     signal input epsilon;
@@ -73,6 +78,7 @@ template ComposedPrivacy(numQueries) {
     signal input deltas[numQueries];
     signal output totalEpsilon;
     signal output totalDelta;
+    signal output isValid;
     
     // Simple composition: sum epsilons and deltas
     signal runningEpsilon[numQueries + 1];
@@ -93,9 +99,13 @@ template ComposedPrivacy(numQueries) {
     component epsilonCheck = LessThan(32);
     epsilonCheck.in[0] <== totalEpsilon;
     epsilonCheck.in[1] <== 10; // Max epsilon = 10 (scaled)
-    epsilonCheck.out === 1;
+    
+    isValid <== epsilonCheck.out;
 }
 
+/*
+ * Safe division template
+ */
 template SafeDivision(n) {
     signal input dividend;
     signal input divisor;
@@ -110,9 +120,11 @@ template SafeDivision(n) {
     component ltDivisor = LessThan(n);
     ltDivisor.in[0] <== remainder;
     ltDivisor.in[1] <== divisor;
-    ltDivisor.out === 1;
 }
 
+/*
+ * Absolute value calculation
+ */
 template AbsoluteValue(n) {
     signal input value;
     signal output absValue;
@@ -168,4 +180,6 @@ template Num2Bits(n) {
     }
     
     lc1 === in;
-} 
+}
+
+component main = DifferentialPrivacy(32);

@@ -1,5 +1,8 @@
 pragma circom 2.0.0;
 
+include "../utilities.circom";
+include "circomlib/circuits/poseidon.circom";
+
 /*
  * Range Proof Circuit
  * 
@@ -9,28 +12,71 @@ pragma circom 2.0.0;
  */
 
 template RangeProof() {
-    signal input value;      // Private value to prove is in range
-    signal input minValue;   // Minimum allowed value (public)
-    signal input maxValue;   // Maximum allowed value (public)
+    // Public inputs
+    signal input min;
+    signal input max;
+    signal input commitment; // Hash of the secret value
     
-    signal output isInRange; // 1 if value is in [minValue, maxValue]
+    // Private inputs
+    signal input value;
+    signal input nonce;
     
-    // Check value >= minValue
-    component geqMin = GreaterEqThan(32);
-    geqMin.in[0] <== value;
-    geqMin.in[1] <== minValue;
+    // Outputs
+    signal output valid;
     
-    // Check value <= maxValue  
-    component leqMax = LessEqThan(32);
-    leqMax.in[0] <== value;
-    leqMax.in[1] <== maxValue;
+    // Verify the commitment
+    component hasher = Poseidon(2);
+    hasher.inputs[0] <== value;
+    hasher.inputs[1] <== nonce;
     
-    // Both conditions must be true
-    component and = AND();
-    and.a <== geqMin.out;
-    and.b <== leqMax.out;
+    component commitmentCheck = IsEqual();
+    commitmentCheck.in[0] <== hasher.out;
+    commitmentCheck.in[1] <== commitment;
     
-    isInRange <== and.out;
+    // Check that min <= value <= max
+    component minCheck = GreaterEqThan(64);
+    minCheck.in[0] <== value;
+    minCheck.in[1] <== min;
+    
+    component maxCheck = LessEqThan(64);
+    maxCheck.in[0] <== value;
+    maxCheck.in[1] <== max;
+    
+    // All checks must pass
+    component andGate1 = AND();
+    andGate1.a <== commitmentCheck.out;
+    andGate1.b <== minCheck.out;
+    
+    component andGate2 = AND();
+    andGate2.a <== andGate1.out;
+    andGate2.b <== maxCheck.out;
+    
+    valid <== andGate2.out;
+}
+
+/*
+ * Range Proof with Custom Bit Length
+ */
+template RangeProofCustom(n) {
+    signal input min;
+    signal input max;
+    signal input value;
+    signal output valid;
+    
+    // Check bounds
+    component minCheck = GreaterEqThan(n);
+    minCheck.in[0] <== value;
+    minCheck.in[1] <== min;
+    
+    component maxCheck = LessEqThan(n);
+    maxCheck.in[0] <== value;
+    maxCheck.in[1] <== max;
+    
+    component andGate = AND();
+    andGate.a <== minCheck.out;
+    andGate.b <== maxCheck.out;
+    
+    valid <== andGate.out;
 }
 
 /*
@@ -39,29 +85,39 @@ template RangeProof() {
  * Proves multiple values are each within their respective ranges
  * More efficient than individual range proofs
  */
-template MultiRangeProof(n) {
-    signal input values[n];       // Private values to prove
-    signal input minValues[n];    // Minimum values for each
-    signal input maxValues[n];    // Maximum values for each
+template MultiRangeProof(n, bitWidth) {
+    signal input values[n];
+    signal input mins[n];
+    signal input maxs[n];
+    signal output valid;
     
-    signal output allInRange;     // 1 if all values are in their ranges
+    component rangeChecks[n];
+    component andGates[n > 1 ? n - 1 : 1];
     
-    component rangeProofs[n];
-    
+    // Check each range
     for (var i = 0; i < n; i++) {
-        rangeProofs[i] = RangeProof();
-        rangeProofs[i].value <== values[i];
-        rangeProofs[i].minValue <== minValues[i];
-        rangeProofs[i].maxValue <== maxValues[i];
+        rangeChecks[i] = RangeProofCustom(bitWidth);
+        rangeChecks[i].value <== values[i];
+        rangeChecks[i].min <== mins[i];
+        rangeChecks[i].max <== maxs[i];
     }
     
-    // All proofs must be valid
-    var allValid = 1;
-    for (var i = 0; i < n; i++) {
-        allValid *= rangeProofs[i].isInRange;
+    // AND all results
+    if (n == 1) {
+        valid <== rangeChecks[0].valid;
+    } else {
+        andGates[0] = AND();
+        andGates[0].a <== rangeChecks[0].valid;
+        andGates[0].b <== rangeChecks[1].valid;
+        
+        for (var i = 1; i < n - 1; i++) {
+            andGates[i] = AND();
+            andGates[i].a <== andGates[i - 1].out;
+            andGates[i].b <== rangeChecks[i + 1].valid;
+        }
+        
+        valid <== andGates[n - 2].out;
     }
-    
-    allInRange <== allValid;
 }
 
 /*
@@ -80,19 +136,19 @@ template PercentageProof() {
     // Basic range check
     component rangeCheck = RangeProof();
     rangeCheck.value <== percentage;
-    rangeCheck.minValue <== minPercent;
-    rangeCheck.maxValue <== maxPercent;
+    rangeCheck.min <== minPercent;
+    rangeCheck.max <== maxPercent;
     
     // Ensure within 0-100 bounds
     component boundsCheck = RangeProof();
     boundsCheck.value <== percentage;
-    boundsCheck.minValue <== 0;
-    boundsCheck.maxValue <== 100;
+    boundsCheck.min <== 0;
+    boundsCheck.max <== 100;
     
     // Both checks must pass
     component and = AND();
-    and.a <== rangeCheck.isInRange;
-    and.b <== boundsCheck.isInRange;
+    and.a <== rangeCheck.valid;
+    and.b <== boundsCheck.valid;
     
     isValidPercent <== and.out;
 }
@@ -119,10 +175,10 @@ template SumRangeProof(n) {
     // Prove sum is in range
     component rangeProof = RangeProof();
     rangeProof.value <== sum;
-    rangeProof.minValue <== minSum;
-    rangeProof.maxValue <== maxSum;
+    rangeProof.min <== minSum;
+    rangeProof.max <== maxSum;
     
-    sumInRange <== rangeProof.isInRange;
+    sumInRange <== rangeProof.valid;
 }
 
 /*
@@ -249,4 +305,77 @@ template ProgressiveRangeProof(levels) {
     and.b <== maxCheck.out;
     
     validLevel <== and.out;
-} 
+}
+
+// Utility templates
+// Utility templates are included from ../utilities.circom
+
+/*
+ * Optimized Range Proof using bit decomposition
+ */
+template OptimizedRangeProof(bits) {
+    signal input value;
+    signal input min;
+    signal input max;
+    signal output valid;
+    
+    // Decompose value into bits
+    component valueBits = Num2Bits(bits);
+    valueBits.in <== value;
+    
+    // Check bounds using comparison
+    component geqMin = GreaterEqThan(bits);
+    geqMin.in[0] <== value;
+    geqMin.in[1] <== min;
+    
+    component leqMax = LessEqThan(bits);
+    leqMax.in[0] <== value;
+    leqMax.in[1] <== max;
+    
+    component finalAnd = AND();
+    finalAnd.a <== geqMin.out;
+    finalAnd.b <== leqMax.out;
+    
+    valid <== finalAnd.out;
+}
+
+/*
+ * Range Proof with Zero Knowledge
+ * Hides the actual value while proving it's in range
+ */
+template ZKRangeProof(bits) {
+    signal input commitment;
+    signal input min;
+    signal input max;
+    
+    // Private inputs
+    signal input value;
+    signal input salt;
+    
+    signal output valid;
+    
+    // Verify commitment
+    component commitHash = Poseidon(2);
+    commitHash.inputs[0] <== value;
+    commitHash.inputs[1] <== salt;
+    
+    component commitCheck = IsEqual();
+    commitCheck.in[0] <== commitHash.out;
+    commitCheck.in[1] <== commitment;
+    
+    // Range check
+    component rangeCheck = OptimizedRangeProof(bits);
+    rangeCheck.value <== value;
+    rangeCheck.min <== min;
+    rangeCheck.max <== max;
+    
+    // Combine results
+    component finalAnd = AND();
+    finalAnd.a <== commitCheck.out;
+    finalAnd.b <== rangeCheck.valid;
+    
+    valid <== finalAnd.out;
+}
+
+// Main component for compilation
+component main = RangeProof();

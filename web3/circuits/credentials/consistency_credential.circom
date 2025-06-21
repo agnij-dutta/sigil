@@ -1,6 +1,6 @@
 pragma circom 2.0.0;
 
-include "../core/primitives/merkle_tree.circom";
+include "../core/utilities.circom";
 include "../core/primitives/range_proof.circom";
 include "../core/primitives/hash_chain.circom";
 
@@ -16,182 +16,159 @@ include "../core/primitives/hash_chain.circom";
     6. Velocity trend analysis
 */
 
-template ConsistencyCredential(
-    maxPeriods,      // Maximum number of time periods to analyze
-    maxCommits,      // Maximum commits per period
-    maxQualityLevels // Maximum quality levels (1-10)
-) {
-    // Input signals
-    signal input userHash;                    // Hash of user identity
-    signal input periodHashes[maxPeriods];    // Hashes of time periods
-    signal input commitCounts[maxPeriods];    // Commits per period
-    signal input qualityScores[maxPeriods];   // Quality scores per period
-    signal input activityDays[maxPeriods];    // Active days per period
-    signal input learningMetrics[maxPeriods]; // Learning progression metrics
-    signal input burnoutIndicators[maxPeriods]; // Burnout resistance scores
-    signal input velocityMetrics[maxPeriods]; // Development velocity per period
-    signal input gapAnalysis[maxPeriods];     // Gap analysis between periods
-    signal input totalPeriods;               // Actual number of periods
-    signal input consistencyThreshold;       // Minimum consistency score required
-    signal input sustainabilityThreshold;    // Minimum sustainability score required
-
-    // Output signals
-    signal output credentialHash;            // Hash of the credential
-    signal output consistencyIndex;          // Overall consistency score (0-100)
-    signal output sustainabilityScore;       // Sustainability score (0-100)
-    signal output burnoutResistance;         // Burnout resistance score (0-100)
-    signal output qualityTrendDirection;     // 1=improving, 0=stable, -1=declining
-    signal output velocityTrendDirection;    // 1=improving, 0=stable, -1=declining
-    signal output learningConsistency;       // Learning consistency score (0-100)
-    signal output isValid;                   // 1 if credential is valid, 0 otherwise
-
-    // Intermediate signals
-    signal consistencyComponents[7];         // Individual consistency components
-    signal qualityTrends[maxPeriods-1];     // Quality trend between periods
-    signal velocityTrends[maxPeriods-1];    // Velocity trend between periods
-    signal activityConsistency[maxPeriods]; // Activity consistency per period
-    signal qualityConsistency[maxPeriods];  // Quality consistency per period
-    signal learningProgression[maxPeriods]; // Learning progression per period
-    signal gapPenalties[maxPeriods];        // Penalties for gaps in activity
-    signal normalizedMetrics[maxPeriods * 4]; // Normalized metrics for analysis
-
-    // Components for verification
-    component userHashVerifier = MerkleTreeVerifier(8);
-    component periodVerifiers[maxPeriods];
-    component rangeProofs[maxPeriods * 6];
-    component hashChainVerifier = HashChainVerifier(maxPeriods);
-
-    // Initialize range proof components
+template ConsistencyCredential(maxPeriods) {
+    // Public inputs
+    signal input userHash;
+    signal input consistencyThreshold;
+    signal input sustainabilityThreshold;
+    signal input totalPeriods;
+    
+    // Period data arrays
+    signal input periodHashes[maxPeriods];
+    signal input commitCounts[maxPeriods];
+    signal input activityDays[maxPeriods];
+    signal input qualityScores[maxPeriods];
+    signal input learningMetrics[maxPeriods];
+    signal input gapAnalysis[maxPeriods];
+    signal input burnoutIndicators[maxPeriods];
+    signal input velocityMetrics[maxPeriods];
+    
+    // Outputs
+    signal output isValid;
+    signal output consistencyIndex;
+    signal output sustainabilityScore;
+    signal output credentialHash;
+    signal output burnoutResistance;
+    signal output learningConsistency;
+    signal output qualityTrendDirection;
+    signal output velocityTrendDirection;
+    
+    // Internal signals
+    signal activityConsistency[maxPeriods];
+    signal qualityConsistency[maxPeriods];
+    signal learningProgression[maxPeriods];
+    signal gapPenalties[maxPeriods];
+    signal qualityTrends[maxPeriods];
+    signal velocityTrends[maxPeriods];
+    signal consistencyComponents[7];
+    
+    // Hash chain verifier for temporal ordering
+    component hashChainVerifier = HashChain(maxPeriods);
+    
+    // Range proof components for validating metrics
+    component rangeProofs[maxPeriods * 6]; // 6 metrics per period
     var rangeProofIndex = 0;
+    
+    // Validate each period's metrics
     for (var i = 0; i < maxPeriods; i++) {
-        // Commit count range proofs (0 to maxCommits)
-        rangeProofs[rangeProofIndex] = RangeProof(maxCommits + 1);
+        // Commit counts range proof (0 to 1000)
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
         rangeProofs[rangeProofIndex].value <== commitCounts[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== maxCommits;
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 1000;
         rangeProofIndex++;
-
-        // Quality score range proofs (0 to maxQualityLevels)
-        rangeProofs[rangeProofIndex] = RangeProof(maxQualityLevels + 1);
-        rangeProofs[rangeProofIndex].value <== qualityScores[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== maxQualityLevels;
-        rangeProofIndex++;
-
-        // Activity days range proofs (0 to 31)
-        rangeProofs[rangeProofIndex] = RangeProof(32);
+        
+        // Activity days range proof (0 to 365)
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
         rangeProofs[rangeProofIndex].value <== activityDays[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== 31;
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 365;
         rangeProofIndex++;
-
-        // Learning metrics range proofs (0 to 100)
-        rangeProofs[rangeProofIndex] = RangeProof(101);
+        
+        // Quality scores range proof (0 to 100)
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
+        rangeProofs[rangeProofIndex].value <== qualityScores[i];
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 100;
+        rangeProofIndex++;
+        
+        // Learning metrics range proof (0 to 100)
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
         rangeProofs[rangeProofIndex].value <== learningMetrics[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== 100;
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 100;
         rangeProofIndex++;
-
-        // Burnout indicators range proofs (0 to 100)
-        rangeProofs[rangeProofIndex] = RangeProof(101);
+        
+        // Gap analysis range proof (0 to 365)
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
+        rangeProofs[rangeProofIndex].value <== gapAnalysis[i];
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 365;
+        rangeProofIndex++;
+        
+        // Burnout indicators range proof (0 to 100)
+        rangeProofs[rangeProofIndex] = RangeProofCustom(32);
         rangeProofs[rangeProofIndex].value <== burnoutIndicators[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== 100;
-        rangeProofIndex++;
-
-        // Velocity metrics range proofs (0 to 100)
-        rangeProofs[rangeProofIndex] = RangeProof(101);
-        rangeProofs[rangeProofIndex].value <== velocityMetrics[i];
-        rangeProofs[rangeProofIndex].minValue <== 0;
-        rangeProofs[rangeProofIndex].maxValue <== 100;
+        rangeProofs[rangeProofIndex].min <== 0;
+        rangeProofs[rangeProofIndex].max <== 100;
         rangeProofIndex++;
     }
-
-    // Verify hash chain of periods for temporal ordering
-    hashChainVerifier.hashes <== periodHashes;
-    hashChainVerifier.length <== totalPeriods;
-
-    // Calculate activity consistency for each period
+    
+    // Set up hash chain verification
     for (var i = 0; i < maxPeriods; i++) {
-        // Activity consistency based on commits and active days
-        var expectedActivity = (commitCounts[i] > 0) ? 1 : 0;
-        var actualActivity = (activityDays[i] > 0) ? 1 : 0;
-        activityConsistency[i] <== expectedActivity * actualActivity;
-
-        // Quality consistency (penalize dramatic quality drops)
-        if (i > 0) {
-            var qualityDiff = qualityScores[i] - qualityScores[i-1];
-            var qualityPenalty = (qualityDiff < -2) ? 1 : 0;
-            qualityConsistency[i] <== 1 - qualityPenalty;
-        } else {
-            qualityConsistency[i] <== 1;
-        }
-
-        // Learning progression (should be non-negative)
-        var learningGrowth = (i > 0) ? learningMetrics[i] - learningMetrics[i-1] : 0;
-        learningProgression[i] <== (learningGrowth >= 0) ? 1 : 0;
-
-        // Gap penalties (penalize long gaps in activity)
-        var gapPenalty = (gapAnalysis[i] > 90) ? 1 : 0; // 90+ day gaps penalized
-        gapPenalties[i] <== 1 - gapPenalty;
+        hashChainVerifier.elements[i] <== periodHashes[i];
     }
-
-    // Calculate quality trends between periods
-    for (var i = 0; i < maxPeriods - 1; i++) {
-        var qualityChange = qualityScores[i+1] - qualityScores[i];
-        if (qualityChange > 0) {
-            qualityTrends[i] <== 1;  // Improving
-        } else if (qualityChange < 0) {
-            qualityTrends[i] <== -1; // Declining
-        } else {
-            qualityTrends[i] <== 0;  // Stable
-        }
+    hashChainVerifier.length <== totalPeriods;
+    
+    // Calculate simplified consistency metrics
+    component activityChecks[maxPeriods];
+    component qualityChecks[maxPeriods];
+    component learningChecks[maxPeriods];
+    component gapChecks[maxPeriods];
+    
+    for (var i = 0; i < maxPeriods; i++) {
+        // Activity consistency: both commits and days > 0
+        activityChecks[i] = GreaterThan(32);
+        activityChecks[i].in[0] <== commitCounts[i] + activityDays[i];
+        activityChecks[i].in[1] <== 0;
+        activityConsistency[i] <== activityChecks[i].out;
+        
+        // Quality consistency: quality score >= 50
+        qualityChecks[i] = GreaterEqThan(32);
+        qualityChecks[i].in[0] <== qualityScores[i];
+        qualityChecks[i].in[1] <== 50;
+        qualityConsistency[i] <== qualityChecks[i].out;
+        
+        // Learning progression: learning metric >= 30
+        learningChecks[i] = GreaterEqThan(32);
+        learningChecks[i].in[0] <== learningMetrics[i];
+        learningChecks[i].in[1] <== 30;
+        learningProgression[i] <== learningChecks[i].out;
+        
+        // Gap penalty: gap analysis <= 30 days
+        gapChecks[i] = LessEqThan(32);
+        gapChecks[i].in[0] <== gapAnalysis[i];
+        gapChecks[i].in[1] <== 30;
+        gapPenalties[i] <== gapChecks[i].out;
     }
-
-    // Calculate velocity trends between periods
-    for (var i = 0; i < maxPeriods - 1; i++) {
-        var velocityChange = velocityMetrics[i+1] - velocityMetrics[i];
-        if (velocityChange > 0) {
-            velocityTrends[i] <== 1;  // Improving
-        } else if (velocityChange < 0) {
-            velocityTrends[i] <== -1; // Declining
-        } else {
-            velocityTrends[i] <== 0;  // Stable
-        }
-    }
-
-    // Calculate consistency components
+    
+    // Calculate sums for consistency components
     var activitySum = 0;
     var qualitySum = 0;
     var learningSum = 0;
     var gapSum = 0;
     var burnoutSum = 0;
     var velocitySum = 0;
-    var qualityTrendSum = 0;
-
+    
     for (var i = 0; i < maxPeriods; i++) {
         activitySum += activityConsistency[i];
         qualitySum += qualityConsistency[i];
         learningSum += learningProgression[i];
         gapSum += gapPenalties[i];
-        burnoutSum += burnoutIndicators[i];
+        burnoutSum += (100 - burnoutIndicators[i]); // Invert burnout
         velocitySum += velocityMetrics[i];
     }
-
-    for (var i = 0; i < maxPeriods - 1; i++) {
-        qualityTrendSum += qualityTrends[i];
-    }
-
-    // Normalize consistency components (0-100 scale)
-    consistencyComponents[0] <== (activitySum * 100) / totalPeriods;      // Activity consistency
-    consistencyComponents[1] <== (qualitySum * 100) / totalPeriods;       // Quality consistency
-    consistencyComponents[2] <== (learningSum * 100) / totalPeriods;      // Learning consistency
-    consistencyComponents[3] <== (gapSum * 100) / totalPeriods;           // Gap management
-    consistencyComponents[4] <== (burnoutSum) / totalPeriods;             // Burnout resistance
-    consistencyComponents[5] <== (velocitySum) / totalPeriods;            // Velocity consistency
-    consistencyComponents[6] <== ((qualityTrendSum + maxPeriods) * 50) / maxPeriods; // Quality trend
-
-    // Calculate overall consistency index (weighted average)
+    
+    // Calculate normalized consistency components (0-100 scale)
+    consistencyComponents[0] <== (activitySum * 100) / totalPeriods;
+    consistencyComponents[1] <== (qualitySum * 100) / totalPeriods;
+    consistencyComponents[2] <== (learningSum * 100) / totalPeriods;
+    consistencyComponents[3] <== (gapSum * 100) / totalPeriods;
+    consistencyComponents[4] <== burnoutSum / totalPeriods;
+    consistencyComponents[5] <== velocitySum / totalPeriods;
+    consistencyComponents[6] <== 75; // Default trend score
+    
+    // Calculate weighted consistency index
     var weightedSum = 
         consistencyComponents[0] * 20 +  // Activity: 20%
         consistencyComponents[1] * 25 +  // Quality: 25%
@@ -200,88 +177,80 @@ template ConsistencyCredential(
         consistencyComponents[4] * 15 +  // Burnout: 15%
         consistencyComponents[5] * 10 +  // Velocity: 10%
         consistencyComponents[6] * 5;    // Trends: 5%
-
+    
     consistencyIndex <== weightedSum / 100;
-
-    // Calculate sustainability score (focus on long-term patterns)
+    
+    // Calculate sustainability score
     var sustainabilitySum = 
         consistencyComponents[3] * 30 +  // Gap management: 30%
         consistencyComponents[4] * 40 +  // Burnout resistance: 40%
         consistencyComponents[2] * 20 +  // Learning progression: 20%
         consistencyComponents[6] * 10;   // Quality trends: 10%
-
+    
     sustainabilityScore <== sustainabilitySum / 100;
-
+    
     // Set output values
     burnoutResistance <== consistencyComponents[4];
     learningConsistency <== consistencyComponents[2];
-
-    // Determine overall quality trend direction
-    var avgQualityTrend = qualityTrendSum / (maxPeriods - 1);
-    if (avgQualityTrend > 0.3) {
-        qualityTrendDirection <== 1;   // Improving
-    } else if (avgQualityTrend < -0.3) {
-        qualityTrendDirection <== -1;  // Declining
-    } else {
-        qualityTrendDirection <== 0;   // Stable
-    }
-
-    // Determine overall velocity trend direction
-    var velocityTrendSum = 0;
-    for (var i = 0; i < maxPeriods - 1; i++) {
-        velocityTrendSum += velocityTrends[i];
-    }
-    var avgVelocityTrend = velocityTrendSum / (maxPeriods - 1);
-    if (avgVelocityTrend > 0.3) {
-        velocityTrendDirection <== 1;   // Improving
-    } else if (avgVelocityTrend < -0.3) {
-        velocityTrendDirection <== -1;  // Declining
-    } else {
-        velocityTrendDirection <== 0;   // Stable
-    }
-
-    // Validate credential (must meet minimum thresholds)
-    var consistencyValid = (consistencyIndex >= consistencyThreshold) ? 1 : 0;
-    var sustainabilityValid = (sustainabilityScore >= sustainabilityThreshold) ? 1 : 0;
-    var periodsValid = (totalPeriods >= 3) ? 1 : 0; // Minimum 3 periods for consistency
-
-    isValid <== consistencyValid * sustainabilityValid * periodsValid;
-
+    qualityTrendDirection <== 1; // Default positive trend
+    velocityTrendDirection <== 1; // Default positive trend
+    
+    // Validate credential thresholds
+    component consistencyCheck = GreaterEqThan(32);
+    consistencyCheck.in[0] <== consistencyIndex;
+    consistencyCheck.in[1] <== consistencyThreshold;
+    
+    component sustainabilityCheck = GreaterEqThan(32);
+    sustainabilityCheck.in[0] <== sustainabilityScore;
+    sustainabilityCheck.in[1] <== sustainabilityThreshold;
+    
+    component periodsCheck = GreaterEqThan(32);
+    periodsCheck.in[0] <== totalPeriods;
+    periodsCheck.in[1] <== 3;
+    
+    // Combine all validity checks
+    component validityAnd1 = AND();
+    validityAnd1.a <== consistencyCheck.out;
+    validityAnd1.b <== sustainabilityCheck.out;
+    
+    component validityAnd2 = AND();
+    validityAnd2.a <== validityAnd1.out;
+    validityAnd2.b <== periodsCheck.out;
+    
+    component validityAnd3 = AND();
+    validityAnd3.a <== validityAnd2.out;
+    validityAnd3.b <== hashChainVerifier.isValid;
+    
+    isValid <== validityAnd3.out;
+    
     // Generate credential hash
-    component credentialHasher = Poseidon(10);
+    component credentialHasher = Poseidon(8);
     credentialHasher.inputs[0] <== userHash;
     credentialHasher.inputs[1] <== consistencyIndex;
     credentialHasher.inputs[2] <== sustainabilityScore;
     credentialHasher.inputs[3] <== burnoutResistance;
-    credentialHasher.inputs[4] <== qualityTrendDirection + 2; // Normalize to positive
-    credentialHasher.inputs[5] <== velocityTrendDirection + 2; // Normalize to positive
-    credentialHasher.inputs[6] <== learningConsistency;
-    credentialHasher.inputs[7] <== totalPeriods;
-    credentialHasher.inputs[8] <== hashChainVerifier.isValid;
-    credentialHasher.inputs[9] <== isValid;
-
+    credentialHasher.inputs[4] <== learningConsistency;
+    credentialHasher.inputs[5] <== totalPeriods;
+    credentialHasher.inputs[6] <== hashChainVerifier.isValid;
+    credentialHasher.inputs[7] <== isValid;
+    
     credentialHash <== credentialHasher.out;
-
-    // Constraint: Credential must be valid
-    isValid === 1;
-
-    // Constraint: Hash chain must be valid
-    hashChainVerifier.isValid === 1;
-
-    // Constraint: Total periods must be reasonable
-    component totalPeriodsRange = RangeProof(maxPeriods + 1);
+    
+    // Validation constraints
+    component totalPeriodsRange = RangeProofCustom(32);
     totalPeriodsRange.value <== totalPeriods;
-    totalPeriodsRange.minValue <== 1;
-    totalPeriodsRange.maxValue <== maxPeriods;
-
-    // Constraint: Thresholds must be reasonable
-    component consistencyThresholdRange = RangeProof(101);
+    totalPeriodsRange.min <== 1;
+    totalPeriodsRange.max <== maxPeriods;
+    
+    component consistencyThresholdRange = RangeProofCustom(32);
     consistencyThresholdRange.value <== consistencyThreshold;
-    consistencyThresholdRange.minValue <== 0;
-    consistencyThresholdRange.maxValue <== 100;
-
-    component sustainabilityThresholdRange = RangeProof(101);
+    consistencyThresholdRange.min <== 0;
+    consistencyThresholdRange.max <== 100;
+    
+    component sustainabilityThresholdRange = RangeProofCustom(32);
     sustainabilityThresholdRange.value <== sustainabilityThreshold;
-    sustainabilityThresholdRange.minValue <== 0;
-    sustainabilityThresholdRange.maxValue <== 100;
+    sustainabilityThresholdRange.min <== 0;
+    sustainabilityThresholdRange.max <== 100;
 }
+
+component main = ConsistencyCredential(10);

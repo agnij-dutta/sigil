@@ -1,5 +1,8 @@
 pragma circom 2.0.0;
 
+include "../utilities.circom";
+include "circomlib/circuits/poseidon.circom";
+
 /*
  * ECDSA Signature Verification Circuit
  * 
@@ -18,11 +21,15 @@ template ECDSAVerifier() {
     // Recover public key from signature and message
     component keyRecovery = ECDSAKeyRecovery();
     keyRecovery.message <== message;
-    keyRecovery.signature <== signature;
+    for (var i = 0; i < 2; i++) {
+        keyRecovery.signature[i] <== signature[i];
+    }
     
     // Derive Ethereum address from public key
     component addressDeriver = PublicKeyToAddress();
-    addressDeriver.publicKey <== keyRecovery.recoveredKey;
+    for (var i = 0; i < 2; i++) {
+        addressDeriver.publicKey[i] <== keyRecovery.recoveredKey[i];
+    }
     
     // Check if recovered address matches expected address
     component addressCheck = IsEqual();
@@ -79,8 +86,10 @@ template MultiSignatureVerifier(n) {
     for (var i = 0; i < n; i++) {
         verifiers[i] = ECDSAVerifier();
         verifiers[i].message <== messages[i];
-        verifiers[i].signature <== signatures[i];
-        verifiers[i].publicKey <== publicKeys[i];
+        for (var j = 0; j < 2; j++) {
+            verifiers[i].signature[j] <== signatures[i][j];
+            verifiers[i].publicKey[j] <== publicKeys[i][j];
+        }
         verifiers[i].expectedAddress <== expectedAddresses[i];
         
         validCount += verifiers[i].isValid;
@@ -115,9 +124,13 @@ template GitHubDataVerifier() {
     // Verify GitHub's signature on the data
     component githubSigVerifier = ECDSAVerifier();
     githubSigVerifier.message <== messageHasher.out;
-    githubSigVerifier.signature <== signature;
-    githubSigVerifier.publicKey <== githubPublicKey;
+    for (var i = 0; i < 2; i++) {
+        githubSigVerifier.signature[i] <== signature[i];
+        githubSigVerifier.publicKey[i] <== githubPublicKey[i];
+    }
     githubSigVerifier.expectedAddress <== githubPublicKey[0]; // Simplified
     
     isAuthentic <== githubSigVerifier.isValid;
-} 
+}
+
+component main = ECDSAVerifier();

@@ -1,13 +1,13 @@
 pragma circom 2.0.0;
 
-include "../primitives/merkle_tree.circom";
+include "../utilities.circom";
 include "../primitives/range_proof.circom";
 
 /*
  * CommitAggregator combines multiple commit proofs into aggregate statistics
  * Proves total commits and LOC ranges across multiple repositories
  */
-template CommitAggregator(maxCommits, maxRepos) {
+template CommitAggregator(maxRepos) {
     // Inputs: Array of commit counts per repository
     signal input commitCounts[maxRepos];
     signal input repositoryHashes[maxRepos];
@@ -17,6 +17,7 @@ template CommitAggregator(maxCommits, maxRepos) {
     signal output totalCommits;
     signal output repoCount;
     signal output aggregateHash;
+    signal output isValid;
     
     // Internal signals
     signal runningSum[maxRepos + 1];
@@ -44,7 +45,6 @@ template CommitAggregator(maxCommits, maxRepos) {
     component countCheck = IsEqual();
     countCheck.in[0] <== repoCount;
     countCheck.in[1] <== validRepos;
-    countCheck.out === 1;
     
     // Create aggregate hash of all repository hashes
     component hasher = Poseidon(maxRepos);
@@ -54,11 +54,17 @@ template CommitAggregator(maxCommits, maxRepos) {
     aggregateHash <== hasher.out;
     
     // Range check: total commits should be reasonable
-    component rangeCheck = RangeProof(32);
+    component rangeCheck = RangeProofCustom(32);
     rangeCheck.value <== totalCommits;
-    rangeCheck.minValue <== 1;
-    rangeCheck.maxValue <== 1000000; // Max 1M commits total
-    rangeCheck.isInRange === 1;
+    rangeCheck.min <== 1;
+    rangeCheck.max <== 1000000; // Max 1M commits total
+    
+    // Combine validity checks
+    component validityAnd = AND();
+    validityAnd.a <== countCheck.out;
+    validityAnd.b <== rangeCheck.valid;
+    
+    isValid <== validityAnd.out;
 }
 
 /*
@@ -71,6 +77,7 @@ template LOCAggregator(maxRepos) {
     signal output totalLOC;
     signal output avgLOCPerRepo;
     signal output locDistributionHash;
+    signal output isValid;
     
     signal runningLOCSum[maxRepos + 1];
     runningLOCSum[0] <== 0;
@@ -101,73 +108,18 @@ template LOCAggregator(maxRepos) {
         locHasher.inputs[i] <== locCounts[i];
     }
     locDistributionHash <== locHasher.out;
+    
+    // Validate total LOC is reasonable
+    component locRangeCheck = RangeProofCustom(32);
+    locRangeCheck.value <== totalLOC;
+    locRangeCheck.min <== 1;
+    locRangeCheck.max <== 10000000; // Max 10M LOC total
+    
+    isValid <== locRangeCheck.valid;
 }
 
-template SafeDivision(n) {
-    signal input dividend;
-    signal input divisor;
-    signal output quotient;
-    signal output remainder;
-    
-    quotient <-- dividend \ divisor;
-    remainder <-- dividend % divisor;
-    
-    dividend === quotient * divisor + remainder;
-    
-    component ltDivisor = LessThan(n);
-    ltDivisor.in[0] <== remainder;
-    ltDivisor.in[1] <== divisor;
-    ltDivisor.out === 1;
-}
+// SafeDivision template removed - using from utilities.circom
 
-template GreaterThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component lt = LessThan(n + 1);
-    lt.in[0] <== in[1] + 1;
-    lt.in[1] <== in[0] + (1 << n);
-    out <== lt.out;
-}
+// Utility templates removed - using from utilities.circom
 
-template LessThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component num2Bits = Num2Bits(n + 1);
-    num2Bits.in <== in[0] + (1 << n) - in[1];
-    out <== 1 - num2Bits.out[n];
-}
-
-template Num2Bits(n) {
-    signal input in;
-    signal output out[n];
-    var lc1 = 0;
-    var e2 = 1;
-    
-    for (var i = 0; i < n; i++) {
-        out[i] <-- (in >> i) & 1;
-        out[i] * (out[i] - 1) === 0;
-        lc1 += out[i] * e2;
-        e2 = e2 + e2;
-    }
-    
-    lc1 === in;
-}
-
-template IsEqual() {
-    signal input in[2];
-    signal output out;
-    out <== IsZero()(in[1] - in[0]);
-}
-
-template IsZero() {
-    signal input in;
-    signal output out;
-    signal inv;
-    inv <-- in != 0 ? 1/in : 0;
-    out <== -in*inv + 1;
-    in*out === 0;
-} 
+// Main component removed - this is a library circuit

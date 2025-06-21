@@ -71,8 +71,9 @@ function compileCircuit(circuit) {
   }
   
   try {
-    // Compile circuit with maximum optimization
-    const command = `circom "${circuitPath}" --r1cs --wasm --sym --c --O2 -o "${outputDir}"`;
+    // Compile circuit with maximum optimization and include path for circomlib
+    const includeLib = path.join(__dirname, '../node_modules');
+    const command = `circom "${circuitPath}" --r1cs --wasm --sym --c --O2 -o "${outputDir}" -l "${includeLib}"`;
     
     execSync(command, { 
       stdio: 'pipe',
