@@ -1,7 +1,7 @@
 import { Header } from "@/components/ui/header"
 import { HeroSection } from "@/components/ui/hero-section"
 import { FeaturesSection } from "@/components/ui/features-section"
-import { HowItWorksSection } from "@/components/ui/how-it-works-section"
+import { TimelineHowItWorks } from "@/components/ui/timeline-how-it-works"
 import { CTASection } from "@/components/ui/cta-section"
 import { FooterSection } from "@/components/ui/footer-section"
 
@@ -11,7 +11,7 @@ export default function Home() {
       <Header />
       <HeroSection />
       <FeaturesSection />
-      <HowItWorksSection />
+      <TimelineHowItWorks />
       <CTASection />
       <FooterSection />
     </div>
