@@ -2,7 +2,6 @@
 
 import CivicAuthButton from '@/components/auth/CivicAuthButton';
 import GitHubAuthButton from '@/components/auth/GitHubAuthButton';
-import WalletConnector from '@/components/auth/WalletConnector';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useUser } from "@civic/auth-web3/react";
