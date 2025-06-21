@@ -13,7 +13,7 @@
 # testing
 /coverage
 /web3/artifacts
-/web3/contracts/broadcast
+/web3/contracts/broadcast/Deploy.s.sol/11155111
 
 # next.js
 /.next/
