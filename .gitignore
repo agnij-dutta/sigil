@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/web3/artifacts
+/web3/contracts/broadcast
 
 # next.js
 /.next/

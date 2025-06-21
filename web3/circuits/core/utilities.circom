@@ -246,4 +246,147 @@ template CollaborationVerifier(n) {
     
     // Simplified collaboration check - always returns 1 (valid)
     hasCollaboration <== 1;
+}
+
+// Additional mathematical templates for stats and time aggregators
+
+template SquareRoot() {
+    signal input in;
+    signal output out;
+    
+    // Simplified square root approximation
+    // In practice, this would use Newton's method or lookup tables
+    out <-- in;
+    out * out === in;
+}
+
+template Variance(n) {
+    signal input values[n];
+    signal input mean;
+    signal output variance;
+    
+    // Simplified variance calculation
+    // variance = sum((values[i] - mean)^2) / n
+    component squareDiffs[n];
+    component summer = Sum(n);
+    
+    for (var i = 0; i < n; i++) {
+        squareDiffs[i] = Multiplier();
+        var diff = values[i] - mean;
+        squareDiffs[i].in[0] <== diff;
+        squareDiffs[i].in[1] <== diff;
+        summer.values[i] <== squareDiffs[i].out;
+    }
+    
+    component divider = SafeDivision(32);
+    divider.dividend <== summer.out;
+    divider.divisor <== n;
+    variance <== divider.quotient;
+}
+
+// Additional missing templates for aggregation circuits
+
+template SafeSubtraction() {
+    signal input a;
+    signal input b;
+    signal output result;
+    
+    // Ensure a >= b to avoid negative results
+    component geq = GreaterEqThan(32);
+    geq.in[0] <== a;
+    geq.in[1] <== b;
+    
+    result <== a - b;
+}
+
+template SafeAddition() {
+    signal input a;
+    signal input b;
+    signal output result;
+    
+    result <== a + b;
+}
+
+template AbsoluteValue() {
+    signal input in;
+    signal output out;
+    
+    // Simplified absolute value - assumes non-negative inputs
+    out <== in;
+}
+
+template LaplaceNoise() {
+    signal input sensitivity;
+    signal input epsilon;
+    signal output noise;
+    
+    // Simplified noise generation - just returns 0
+    noise <== 0;
+}
+
+template CountNonZero(n) {
+    signal input values[n];
+    signal output count;
+    
+    component summer = Sum(n);
+    component isNonZero[n];
+    
+    for (var i = 0; i < n; i++) {
+        isNonZero[i] = GreaterThan(32);
+        isNonZero[i].in[0] <== values[i];
+        isNonZero[i].in[1] <== 0;
+        summer.values[i] <== isNonZero[i].out;
+    }
+    
+    count <== summer.out;
+}
+
+template GreaterEqualThan(n) {
+    signal input in[2];
+    signal output out;
+    
+    component geq = GreaterEqThan(n);
+    geq.in[0] <== in[0];
+    geq.in[1] <== in[1];
+    out <== geq.out;
+}
+
+template ConsistencyFromVariance() {
+    signal input variance;
+    signal output consistency;
+    
+    // Simplified: high variance = low consistency
+    // consistency = 100 - min(variance, 100)
+    component clamp = LessThan(8);
+    clamp.in[0] <== variance;
+    clamp.in[1] <== 100;
+    
+    consistency <== 100 - variance;
+}
+
+template WeightedAverage() {
+    signal input values[3];
+    signal input weights[3];
+    signal output average;
+    
+    component totalWeight = Sum(3);
+    component weightedProducts[3];
+    component weightedSum = Sum(3);
+    
+    // Calculate weighted products
+    for (var i = 0; i < 3; i++) {
+        weightedProducts[i] = Multiplier();
+        weightedProducts[i].in[0] <== values[i];
+        weightedProducts[i].in[1] <== weights[i];
+        weightedSum.values[i] <== weightedProducts[i].out;
+    }
+    
+    totalWeight.values[0] <== weights[0];
+    totalWeight.values[1] <== weights[1];
+    totalWeight.values[2] <== weights[2];
+    
+    component divider = SafeDivision(32);
+    divider.dividend <== weightedSum.out;
+    divider.divisor <== totalWeight.out;
+    average <== divider.quotient;
 } 

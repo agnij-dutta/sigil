@@ -56,17 +56,19 @@ template TimeAggregator(MAX_COMMITS) {
     component timeChain = HashChain(MAX_COMMITS);
     
     // Calculate time gaps between consecutive commits
+    component gapCalcs[MAX_COMMITS];
+    component timeOrders[MAX_COMMITS];
     for (var i = 1; i < MAX_COMMITS; i++) {
-        component gapCalc = SafeSubtraction();
-        gapCalc.a <== timestamps[i];
-        gapCalc.b <== timestamps[i-1];
-        timeGaps[i] <== gapCalc.result;
+        gapCalcs[i] = SafeSubtraction();
+        gapCalcs[i].a <== timestamps[i];
+        gapCalcs[i].b <== timestamps[i-1];
+        timeGaps[i] <== gapCalcs[i].result;
         
         // Verify timestamps are ordered
-        component timeOrder = GreaterThan(32);
-        timeOrder.in[0] <== timestamps[i];
-        timeOrder.in[1] <== timestamps[i-1];
-        timeOrder.out === 1;
+        timeOrders[i] = GreaterThan(32);
+        timeOrders[i].in[0] <== timestamps[i];
+        timeOrders[i].in[1] <== timestamps[i-1];
+        timeOrders[i].out === 1;
     }
     timeGaps[0] <== 0; // First commit has no gap
     
@@ -124,6 +126,8 @@ template TimeAggregator(MAX_COMMITS) {
     gapAnalysis <== gapAnalyzer.analysis;
     
     // Build hash chain for temporal integrity
+    timeChain.startHash <== 1; // Default start hash
+    timeChain.finalHash <== activityPeriods + consistencyIndex; // Computed final hash
     for (var i = 0; i < MAX_COMMITS; i++) {
         timeChain.values[i] <== timestamps[i];
     }
@@ -184,11 +188,12 @@ template ActivityPeriodCalculator(N) {
     
     // Simplified period calculation for circuit efficiency
     component activeCounter = Sum(N);
+    component thresholdChecks[N];
     for (var i = 0; i < N; i++) {
-        component thresholdCheck = GreaterEqualThan(8);
-        thresholdCheck.in[0] <== commitSizes[i];
-        thresholdCheck.in[1] <== threshold;
-        activePeriods[i] <== thresholdCheck.out;
+        thresholdChecks[i] = GreaterEqualThan(8);
+        thresholdChecks[i].in[0] <== commitSizes[i];
+        thresholdChecks[i].in[1] <== threshold;
+        activePeriods[i] <== thresholdChecks[i].out;
         activeCounter.values[i] <== activePeriods[i];
     }
     periods <== activeCounter.out;
@@ -220,7 +225,7 @@ template FrequencyCalculator(N) {
     timeSpan <== spanCalc.result;
     
     // Calculate average frequency (commits per period)
-    component freqCalc = SafeDivision();
+    component freqCalc = SafeDivision(32);
     freqCalc.dividend <== totalCommits * periodLength;
     freqCalc.divisor <== timeSpan;
     avgFrequency <== freqCalc.quotient;
@@ -240,17 +245,28 @@ template TemporalConsistency(N) {
     signal gapVariance;
     signal consistencyScore;
     
+    // First calculate mean of timeGaps
+    component meanCalc = Sum(N);
+    for (var i = 0; i < N; i++) {
+        meanCalc.values[i] <== timeGaps[i];
+    }
+    signal meanValue;
+    component meanDiv = SafeDivision(32);
+    meanDiv.dividend <== meanCalc.out;
+    meanDiv.divisor <== N;
+    meanValue <== meanDiv.quotient;
+    
     component varianceCalc = Variance(N);
     for (var i = 0; i < N; i++) {
         varianceCalc.values[i] <== timeGaps[i];
     }
-    gapVariance <== varianceCalc.result;
+    varianceCalc.mean <== meanValue;
+    gapVariance <== varianceCalc.variance;
     
     // Lower variance = higher consistency (simplified calculation)
     component consistencyCalc = ConsistencyFromVariance();
     consistencyCalc.variance <== gapVariance;
-    consistencyCalc.maxGap <== maxGap;
-    index <== consistencyCalc.score;
+    index <== consistencyCalc.consistency;
 }
 
 /*
@@ -269,21 +285,22 @@ template QualityTrendAnalyzer(N) {
     
     component qualityCalc = Sum(N);
     component timeWeightCalc = Sum(N);
+    component qualityChecks[N];
     
     for (var i = 0; i < N; i++) {
-        component qualityCheck = GreaterEqualThan(16);
-        qualityCheck.in[0] <== commitSizes[i];
-        qualityCheck.in[1] <== qualityThreshold;
+        qualityChecks[i] = GreaterEqualThan(16);
+        qualityChecks[i].in[0] <== commitSizes[i];
+        qualityChecks[i].in[1] <== qualityThreshold;
         
-        qualityCalc.values[i] <== qualityCheck.out;
-        timeWeightCalc.values[i] <== qualityCheck.out * (i + 1); // Weight by position
+        qualityCalc.values[i] <== qualityChecks[i].out;
+        timeWeightCalc.values[i] <== qualityChecks[i].out * (i + 1); // Weight by position
     }
     
     qualitySum <== qualityCalc.out;
     timeWeightedSum <== timeWeightCalc.out;
     
     // Calculate trend (positive if improving)
-    component trendCalc = SafeDivision();
+    component trendCalc = SafeDivision(32);
     trendCalc.dividend <== timeWeightedSum;
     trendCalc.divisor <== qualitySum + 1; // Avoid division by zero
     trend <== trendCalc.quotient;
@@ -306,17 +323,19 @@ template SustainabilityCalculator(N) {
     // Count commits within acceptable time gaps
     component regularityCalc = Sum(N);
     component volumeCalc = Sum(N);
+    component gapChecks[N];
+    component sizeChecks[N];
     
     for (var i = 0; i < N; i++) {
-        component gapCheck = LessThan(32);
-        gapCheck.in[0] <== timeGaps[i];
-        gapCheck.in[1] <== maxGap;
-        regularityCalc.values[i] <== gapCheck.out;
+        gapChecks[i] = LessThan(32);
+        gapChecks[i].in[0] <== timeGaps[i];
+        gapChecks[i].in[1] <== maxGap;
+        regularityCalc.values[i] <== gapChecks[i].out;
         
-        component sizeCheck = GreaterThan(16);
-        sizeCheck.in[0] <== commitSizes[i];
-        sizeCheck.in[1] <== 0;
-        volumeCalc.values[i] <== sizeCheck.out;
+        sizeChecks[i] = GreaterThan(16);
+        sizeChecks[i].in[0] <== commitSizes[i];
+        sizeChecks[i].in[1] <== 0;
+        volumeCalc.values[i] <== sizeChecks[i].out;
     }
     
     regularityScore <== regularityCalc.out;
@@ -324,11 +343,13 @@ template SustainabilityCalculator(N) {
     
     // Combined sustainability score
     component sustainabilityCalc = WeightedAverage();
-    sustainabilityCalc.value1 <== regularityScore;
-    sustainabilityCalc.weight1 <== 60; // 60% weight on regularity
-    sustainabilityCalc.value2 <== volumeScore;
-    sustainabilityCalc.weight2 <== 40; // 40% weight on volume
-    score <== sustainabilityCalc.result;
+    sustainabilityCalc.values[0] <== regularityScore;
+    sustainabilityCalc.weights[0] <== 60; // 60% weight on regularity
+    sustainabilityCalc.values[1] <== volumeScore;
+    sustainabilityCalc.weights[1] <== 40; // 40% weight on volume
+    sustainabilityCalc.values[2] <== 0; // Unused third value
+    sustainabilityCalc.weights[2] <== 0;
+    score <== sustainabilityCalc.average;
 }
 
 /*
@@ -344,16 +365,17 @@ template GapAnalyzer(N) {
     signal longGaps[N];
     
     component gapCounter = Sum(N);
+    component isLongGaps[N];
     for (var i = 0; i < N; i++) {
-        component isLongGap = GreaterThan(32);
-        isLongGap.in[0] <== timeGaps[i];
-        isLongGap.in[1] <== maxGap;
-        longGaps[i] <== isLongGap.out;
+        isLongGaps[i] = GreaterThan(32);
+        isLongGaps[i].in[0] <== timeGaps[i];
+        isLongGaps[i].in[1] <== maxGap;
+        longGaps[i] <== isLongGaps[i].out;
         gapCounter.values[i] <== longGaps[i];
     }
     
     // Calculate gap analysis score (fewer long gaps = better)
-    component gapScore = SafeDivision();
+    component gapScore = SafeDivision(32);
     gapScore.dividend <== (N - gapCounter.out) * 100;
     gapScore.divisor <== N;
     analysis <== gapScore.quotient;

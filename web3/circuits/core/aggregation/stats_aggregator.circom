@@ -77,11 +77,12 @@ template StatsAggregator(N) {
     
     // Calculate weighted values and total weight
     component totalWeightCalc = Sum(N);
+    component weightedValueCalcs[N];
     for (var i = 0; i < N; i++) {
-        component weightedValueCalc = Multiplier();
-        weightedValueCalc.in[0] <== values[i];
-        weightedValueCalc.in[1] <== weights[i];
-        weightedValues[i] <== weightedValueCalc.out;
+        weightedValueCalcs[i] = Multiplier();
+        weightedValueCalcs[i].in[0] <== values[i];
+        weightedValueCalcs[i].in[1] <== weights[i];
+        weightedValues[i] <== weightedValueCalcs[i].out;
         
         totalWeightCalc.values[i] <== weights[i];
     }
@@ -112,11 +113,12 @@ template StatsAggregator(N) {
     outlierCount <== outlierCounter.out;
     
     // Calculate robust weights (excluding outliers)
+    component robustWeightCalcs[N];
     for (var i = 0; i < N; i++) {
-        component robustWeightCalc = Multiplier();
-        robustWeightCalc.in[0] <== weights[i];
-        robustWeightCalc.in[1] <== 1 - outlierFlags[i]; // 0 if outlier, weight if not
-        robustWeights[i] <== robustWeightCalc.out;
+        robustWeightCalcs[i] = Multiplier();
+        robustWeightCalcs[i].in[0] <== weights[i];
+        robustWeightCalcs[i].in[1] <== 1 - outlierFlags[i]; // 0 if outlier, weight if not
+        robustWeights[i] <== robustWeightCalcs[i].out;
     }
     
     // Calculate robust mean (excluding outliers)
@@ -127,16 +129,18 @@ template StatsAggregator(N) {
     robustMean <== robustMeanCalc.result;
     
     // Calculate deviations and squared deviations
+    component deviationCalcs[N];
+    component squaredDeviationCalcs[N];
     for (var i = 0; i < N; i++) {
-        component deviationCalc = SafeSubtraction();
-        deviationCalc.a <== values[i];
-        deviationCalc.b <== mean;
-        deviations[i] <== deviationCalc.result;
+        deviationCalcs[i] = SafeSubtraction();
+        deviationCalcs[i].a <== values[i];
+        deviationCalcs[i].b <== mean;
+        deviations[i] <== deviationCalcs[i].result;
         
-        component squaredDeviationCalc = Multiplier();
-        squaredDeviationCalc.in[0] <== deviations[i];
-        squaredDeviationCalc.in[1] <== deviations[i];
-        squaredDeviations[i] <== squaredDeviationCalc.out;
+        squaredDeviationCalcs[i] = Multiplier();
+        squaredDeviationCalcs[i].in[0] <== deviations[i];
+        squaredDeviationCalcs[i].in[1] <== deviations[i];
+        squaredDeviations[i] <== squaredDeviationCalcs[i].out;
     }
     
     // Calculate weighted variance
@@ -181,6 +185,8 @@ template StatsAggregator(N) {
     confidenceInterval[1] <== confidenceCalc.upperBound;
     
     // Build integrity hash chain
+    dataChain.startHash <== 1; // Default start hash
+    dataChain.finalHash <== mean + variance; // Computed final hash
     for (var i = 0; i < N; i++) {
         dataChain.values[i] <== values[i] + weights[i]; // Combined hash
     }
@@ -223,16 +229,17 @@ template WeightedMean(N) {
     // Calculate weighted sum
     signal weightedSum;
     component sumCalc = Sum(N);
+    component weightedValues[N];
     for (var i = 0; i < N; i++) {
-        component weightedValue = Multiplier();
-        weightedValue.in[0] <== values[i];
-        weightedValue.in[1] <== weights[i];
-        sumCalc.values[i] <== weightedValue.out;
+        weightedValues[i] = Multiplier();
+        weightedValues[i].in[0] <== values[i];
+        weightedValues[i].in[1] <== weights[i];
+        sumCalc.values[i] <== weightedValues[i].out;
     }
     weightedSum <== sumCalc.out;
     
     // Calculate mean
-    component meanCalc = SafeDivision();
+    component meanCalc = SafeDivision(32);
     meanCalc.dividend <== weightedSum;
     meanCalc.divisor <== totalWeight;
     result <== meanCalc.quotient;
@@ -252,16 +259,17 @@ template WeightedVariance(N) {
     // Calculate weighted sum of squared deviations
     signal weightedSumSquares;
     component sumSquaresCalc = Sum(N);
+    component weightedSquares[N];
     for (var i = 0; i < N; i++) {
-        component weightedSquare = Multiplier();
-        weightedSquare.in[0] <== squaredDeviations[i];
-        weightedSquare.in[1] <== weights[i];
-        sumSquaresCalc.values[i] <== weightedSquare.out;
+        weightedSquares[i] = Multiplier();
+        weightedSquares[i].in[0] <== squaredDeviations[i];
+        weightedSquares[i].in[1] <== weights[i];
+        sumSquaresCalc.values[i] <== weightedSquares[i].out;
     }
     weightedSumSquares <== sumSquaresCalc.out;
     
     // Calculate variance
-    component varianceCalc = SafeDivision();
+    component varianceCalc = SafeDivision(32);
     varianceCalc.dividend <== weightedSumSquares;
     varianceCalc.divisor <== totalWeight;
     result <== varianceCalc.quotient;
@@ -278,18 +286,21 @@ template OutlierDetector(N) {
     signal output isOutlier[N];
     
     // Detect outliers based on deviation from mean
+    component deviations[N];
+    component absDeviations[N];
+    component outlierChecks[N];
     for (var i = 0; i < N; i++) {
-        component deviation = SafeSubtraction();
-        deviation.a <== values[i];
-        deviation.b <== mean;
+        deviations[i] = SafeSubtraction();
+        deviations[i].a <== values[i];
+        deviations[i].b <== mean;
         
-        component absDeviation = AbsoluteValue();
-        absDeviation.value <== deviation.result;
+        absDeviations[i] = AbsoluteValue();
+        absDeviations[i].in <== deviations[i].result;
         
-        component outlierCheck = GreaterThan(32);
-        outlierCheck.in[0] <== absDeviation.result;
-        outlierCheck.in[1] <== threshold;
-        isOutlier[i] <== outlierCheck.out;
+        outlierChecks[i] = GreaterThan(32);
+        outlierChecks[i].in[0] <== absDeviations[i].out;
+        outlierChecks[i].in[1] <== threshold;
+        isOutlier[i] <== outlierChecks[i].out;
     }
 }
 
@@ -307,19 +318,20 @@ template RobustMean(N) {
     
     component sumCalc = Sum(N);
     component weightCalc = Sum(N);
+    component weightedValues[N];
     
     for (var i = 0; i < N; i++) {
-        component weightedValue = Multiplier();
-        weightedValue.in[0] <== values[i];
-        weightedValue.in[1] <== weights[i];
-        sumCalc.values[i] <== weightedValue.out;
+        weightedValues[i] = Multiplier();
+        weightedValues[i].in[0] <== values[i];
+        weightedValues[i].in[1] <== weights[i];
+        sumCalc.values[i] <== weightedValues[i].out;
         weightCalc.values[i] <== weights[i];
     }
     
     weightedSum <== sumCalc.out;
     totalWeight <== weightCalc.out;
     
-    component meanCalc = SafeDivision();
+    component meanCalc = SafeDivision(32);
     meanCalc.dividend <== weightedSum;
     meanCalc.divisor <== totalWeight + 1; // Avoid division by zero
     result <== meanCalc.quotient;
@@ -340,15 +352,15 @@ template ConfidenceInterval(N) {
     // Calculate standard error
     signal standardError;
     component sqrtCalc = SquareRoot();
-    sqrtCalc.value <== variance;
-    standardError <== sqrtCalc.result;
+    sqrtCalc.in <== variance;
+    standardError <== sqrtCalc.out;
     
     // Calculate margin of error (simplified)
     signal marginOfError;
     component marginCalc = Multiplier();
     marginCalc.in[0] <== standardError;
     marginCalc.in[1] <== 196; // Approximation for 95% confidence (1.96 * 100)
-    component marginDiv = SafeDivision();
+    component marginDiv = SafeDivision(32);
     marginDiv.dividend <== marginCalc.out;
     marginDiv.divisor <== 100;
     marginOfError <== marginDiv.quotient;
@@ -379,21 +391,23 @@ template SkewnessCalculator(N) {
     // Calculate third moment (simplified)
     signal thirdMoment;
     component thirdMomentCalc = Sum(N);
+    component cubedDeviations[N];
+    component weightedCubes[N];
     
     for (var i = 0; i < N; i++) {
-        component cubedDeviation = Multiplier();
-        cubedDeviation.in[0] <== deviations[i] * deviations[i];
-        cubedDeviation.in[1] <== deviations[i];
+        cubedDeviations[i] = Multiplier();
+        cubedDeviations[i].in[0] <== deviations[i] * deviations[i];
+        cubedDeviations[i].in[1] <== deviations[i];
         
-        component weightedCube = Multiplier();
-        weightedCube.in[0] <== cubedDeviation.out;
-        weightedCube.in[1] <== weights[i];
-        thirdMomentCalc.values[i] <== weightedCube.out;
+        weightedCubes[i] = Multiplier();
+        weightedCubes[i].in[0] <== cubedDeviations[i].out;
+        weightedCubes[i].in[1] <== weights[i];
+        thirdMomentCalc.values[i] <== weightedCubes[i].out;
     }
     thirdMoment <== thirdMomentCalc.out;
     
     // Calculate skewness (simplified)
-    component skewnessCalc = SafeDivision();
+    component skewnessCalc = SafeDivision(32);
     skewnessCalc.dividend <== thirdMoment;
     skewnessCalc.divisor <== variance * variance + 1; // Avoid division by zero
     skewness <== skewnessCalc.quotient;
@@ -413,11 +427,12 @@ template DifferentialPrivacy(N) {
     // Calculate true sum
     signal trueSum;
     component sumCalc = Sum(N);
+    component weightedValues[N];
     for (var i = 0; i < N; i++) {
-        component weightedValue = Multiplier();
-        weightedValue.in[0] <== values[i];
-        weightedValue.in[1] <== weights[i];
-        sumCalc.values[i] <== weightedValue.out;
+        weightedValues[i] = Multiplier();
+        weightedValues[i].in[0] <== values[i];
+        weightedValues[i].in[1] <== weights[i];
+        sumCalc.values[i] <== weightedValues[i].out;
     }
     trueSum <== sumCalc.out;
     
