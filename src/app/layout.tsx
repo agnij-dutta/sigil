@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { CivicAuthClientProvider } from "@/components/providers/CivicAuthClientProvider";
+import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sigil - Connect & Collaborate",
-  description: "A platform for meaningful connections and collaborative work",
+  title: "Sigil - Verifiable Developer Credentials",
+  description: "Transform your GitHub contributions into verifiable credentials. Build trust, showcase expertise, and unlock new opportunities.",
 };
 
 export default function RootLayout({
@@ -24,13 +25,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <CivicAuthClientProvider>
-          {children}
-        </CivicAuthClientProvider>
+        <ThemeProvider>
+          <CivicAuthClientProvider>
+            {children}
+          </CivicAuthClientProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

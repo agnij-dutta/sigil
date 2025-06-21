@@ -1,5 +1,6 @@
 'use client';
 
+import { Header } from "@/components/ui/header"
 import CivicAuthButton from '@/components/auth/CivicAuthButton';
 import GitHubAuthButton from '@/components/auth/GitHubAuthButton';
 import { useState, useEffect } from 'react';
@@ -126,8 +127,10 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
           <div>
@@ -429,6 +432,7 @@ export default function Dashboard() {
               <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Coming Soon</span>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
