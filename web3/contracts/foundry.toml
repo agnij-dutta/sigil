@@ -2,23 +2,32 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-test = "test"
-cache_path = "cache"
+solc_version = "0.8.20"
 optimizer = true
-optimizer_runs = 1000
-solc_version = "0.8.19"
+optimizer_runs = 1000000
 via_ir = true
-gas_reports = ["*"]
-gas_limit = 30000000
+auto_detect_solc = false
 
-[profile.default.fmt]
-line_length = 120
-tab_width = 4
-bracket_spacing = true
-int_types = "long"
-
+# Sepolia configuration
 [rpc_endpoints]
-anvil = "http://localhost:8545"
-mainnet = "https://eth-mainnet.alchemyapi.io/v2"
+sepolia = "${SEPOLIA_RPC_URL}"
+localhost = "http://localhost:8545"
 
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
+
+# ZK-specific optimizations
+[profile.zk]
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+bytecode_hash = "none"
+cbor_metadata = false
+
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 256
+depth = 15
+fail_on_revert = false
