@@ -43,7 +43,7 @@ export const Timeline = ({ data }: { data: TimelineEntry[] }) => {
           Sigil Journey Timeline
         </h2>
         <p className="text-muted-foreground text-sm md:text-base max-w-sm">
-          Follow the development of Sigil and see how we're transforming developer credentials.
+          Follow the development of Sigil and see how we&apos;re transforming developer credentials.
         </p>
       </div>
 

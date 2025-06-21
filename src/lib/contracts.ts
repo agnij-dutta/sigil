@@ -243,6 +243,7 @@ export class ContractService {
         abi: CREDENTIAL_REGISTRY_ABI,
         functionName: 'registerCredential',
         account: userAddress,
+        chain: sepolia, // Explicitly specify Sepolia chain
         args: [
           credentialHash,
           userAddress,

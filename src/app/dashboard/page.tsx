@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { Header } from '@/components/ui/header';
 import { WalletStatus } from '@/components/ui/wallet-status';
+import { NetworkSwitcher } from '@/components/ui/network-switcher';
 import CivicAuthButton from '@/components/auth/CivicAuthButton';
 import GitHubAuthButton from '@/components/auth/GitHubAuthButton';
 import Link from 'next/link';
 import { useWallet } from '../../../web3/wallet/hooks/useWallet';
 import ContributorsTable from '@/components/ui/ruixen-contributors-table';
 import { AuthToken } from '@/types/auth';
-import { Badge } from '@/components/ui/badge';
+
 import { Button } from '@/components/ui/button';
 import { 
   Code2,
@@ -20,7 +21,7 @@ import {
   TrendingUp,
   Settings,
   Shield,
-  Link as LinkIcon,
+
   Unlink,
   User,
   ExternalLink,
@@ -223,6 +224,9 @@ export default function Dashboard() {
                 className="text-gray-300"
               />
             </div>
+
+            {/* Network Status */}
+            <NetworkSwitcher />
 
             {/* Quick Actions */}
             <div className="glass-card p-4 rounded-2xl">
