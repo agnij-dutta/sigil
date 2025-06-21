@@ -20,7 +20,7 @@ library ProofVerification {
         uint256[2][2] beta;
         uint256[2][2] gamma;
         uint256[2][2] delta;
-        uint256[][] ic; // Interpolation coefficients
+        uint256[2][] ic; // Interpolation coefficients
     }
 
     // Custom errors
@@ -100,11 +100,7 @@ library ProofVerification {
         bool[] memory results = new bool[](proofs.length);
         
         for (uint256 i = 0; i < proofs.length; i++) {
-            try this.verifyGroth16Proof(proofs[i], publicInputsArray[i], vks[i]) returns (bool result) {
-                results[i] = result;
-            } catch {
-                results[i] = false;
-            }
+            results[i] = verifyGroth16Proof(proofs[i], publicInputsArray[i], vks[i]);
         }
         
         return results;
@@ -274,7 +270,7 @@ library ProofVerification {
      */
     function validatePublicInputs(uint256[] memory publicInputs) internal pure returns (bool) {
         // BN254 field modulus
-        uint256 constant FIELD_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+        uint256 FIELD_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
         
         for (uint256 i = 0; i < publicInputs.length; i++) {
             if (publicInputs[i] >= FIELD_MODULUS) {

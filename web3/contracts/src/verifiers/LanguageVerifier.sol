@@ -6,41 +6,47 @@ import "../../libraries/ProofVerification.sol";
 /**
  * @title LanguageVerifier
  * @dev Verifies programming language proficiency credentials
- * Handles ZK proofs for language skill verification
+ * Matches the DynamicLanguageCredential circuit specification exactly
+ * 
+ * Public inputs (2 total):
+ * [0] = languageCount (number of languages used)
+ * [1] = languageSetHash (unique hash of the language set)
  */
 contract LanguageVerifier {
-    using ProofVerification for bytes32;
-
     // Verifying key for language credential circuit
     ProofVerification.VerifyingKey public verifyingKey;
     
-    // Contract owner
+    // Contract owner for updates
     address public owner;
     
-    // Verification statistics
+    // Proof verification statistics
     mapping(address => uint256) public verificationCount;
     mapping(bytes32 => bool) public usedProofs;
     
     // Language proficiency levels
-    enum ProficiencyLevel { BEGINNER, INTERMEDIATE, ADVANCED, EXPERT }
+    mapping(address => mapping(bytes32 => uint256)) public languageProficiency;
     
     // Events
     event ProofVerified(
         address indexed user,
         bytes32 indexed proofHash,
         uint256 languageCount,
+        bytes32 languageSetHash,
         uint256 timestamp
     );
     
-    event VerifyingKeyUpdated(address indexed updater, uint256 timestamp);
+    event VerifyingKeyUpdated(
+        address indexed updater,
+        uint256 timestamp
+    );
 
     // Errors
     error UnauthorizedAccess();
     error ProofAlreadyUsed();
     error InvalidLanguageProof();
     error InvalidPublicInputs();
-    error InvalidLanguageCount();
 
+    // Modifiers
     modifier onlyOwner() {
         if (msg.sender != owner) revert UnauthorizedAccess();
         _;
@@ -52,45 +58,55 @@ contract LanguageVerifier {
     }
 
     /**
-     * @dev Verify language proficiency credential proof
-     * @param proof ZK proof data
-     * @param publicSignals Public inputs for the circuit
+     * @dev Verify language credential proof
+     * @param proof ZK proof data (encoded Groth16 proof)
+     * @param publicSignals Public inputs matching circuit specification
      * @return True if proof is valid
      */
     function verifyProof(
         bytes calldata proof,
-        uint256[] calldata publicSignals
+        uint256[2] calldata publicSignals
     ) external returns (bool) {
-        // Validate public inputs for language credential
+        // Validate public inputs structure for language credential circuit
         if (!_validateLanguageInputs(publicSignals)) {
             revert InvalidPublicInputs();
         }
 
-        // Prevent proof replay
+        // Check proof hasn't been used before (prevent replay attacks)
         bytes32 proofHash = keccak256(proof);
         if (usedProofs[proofHash]) {
             revert ProofAlreadyUsed();
         }
 
-        // Verify ZK proof
+        // Convert array to dynamic array for library compatibility
+        uint256[] memory publicInputs = new uint256[](2);
+        publicInputs[0] = publicSignals[0];
+        publicInputs[1] = publicSignals[1];
+
+        // Verify proof using ProofVerification library
         bool isValid = ProofVerification.verifyEncodedProof(
             proof,
-            publicSignals,
-            _encodeVerifyingKey()
+            publicInputs,
+            abi.encode(verifyingKey)
         );
 
         if (!isValid) {
             revert InvalidLanguageProof();
         }
 
-        // Update state
+        // Mark proof as used and update statistics
         usedProofs[proofHash] = true;
         verificationCount[msg.sender]++;
+
+        // Store language proficiency
+        bytes32 languageSetHash = bytes32(publicSignals[1]);
+        languageProficiency[msg.sender][languageSetHash] = publicSignals[0];
 
         emit ProofVerified(
             msg.sender, 
             proofHash, 
-            publicSignals[0], // language count
+            publicSignals[0], 
+            languageSetHash, 
             block.timestamp
         );
         
@@ -98,78 +114,117 @@ contract LanguageVerifier {
     }
 
     /**
-     * @dev Validate language credential public inputs
-     * Expected format:
-     * [0] = languageCount (2-50 languages)
-     * [1] = languageSetHash (hash of language set for uniqueness)
-     * [2] = totalLOCRange (encoded total LOC across languages)
-     * [3] = diversityScore (language diversity score 0-100)
-     * [4] = proficiencyLevel (average proficiency level)
-     * [5] = frameworkCount (number of frameworks/libraries)
-     * [6] = projectCount (number of projects using languages)
-     * [7] = consistencyScore (consistency of language usage)
-     * [8] = learningTrend (learning trend: 0=declining, 1=stable, 2=improving)
-     * [9] = marketRelevance (market relevance score 0-100)
+     * @dev Batch verify multiple language proofs
+     * @param proofs Array of proof data
+     * @param publicSignalsArray Array of public inputs
+     * @return Array of verification results
      */
-    function _validateLanguageInputs(uint256[] calldata publicSignals) 
+    function batchVerifyProofs(
+        bytes[] calldata proofs,
+        uint256[2][] calldata publicSignalsArray
+    ) external returns (bool[] memory) {
+        require(proofs.length == publicSignalsArray.length, "Array length mismatch");
+        
+        bool[] memory results = new bool[](proofs.length);
+        
+        for (uint256 i = 0; i < proofs.length; i++) {
+            // Validate inputs first
+            if (!_validateLanguageInputs(publicSignalsArray[i])) {
+                results[i] = false;
+                continue;
+            }
+
+            bytes32 proofHash = keccak256(proofs[i]);
+            if (usedProofs[proofHash]) {
+                results[i] = false;
+                continue;
+            }
+
+            // Convert to dynamic array for verification
+            uint256[] memory publicInputs = new uint256[](2);
+            publicInputs[0] = publicSignalsArray[i][0];
+            publicInputs[1] = publicSignalsArray[i][1];
+
+            bool result = ProofVerification.verifyEncodedProof(
+                proofs[i],
+                publicInputs,
+                abi.encode(verifyingKey)
+            );
+            
+            if (result) {
+                usedProofs[proofHash] = true;
+                verificationCount[msg.sender]++;
+                
+                bytes32 languageSetHash = bytes32(publicSignalsArray[i][1]);
+                languageProficiency[msg.sender][languageSetHash] = publicSignalsArray[i][0];
+                
+                emit ProofVerified(
+                    msg.sender, 
+                    proofHash, 
+                    publicSignalsArray[i][0], 
+                    languageSetHash, 
+                    block.timestamp
+                );
+            }
+            results[i] = result;
+        }
+        
+        return results;
+    }
+
+    /**
+     * @dev Validate language credential public inputs
+     * Based on DynamicLanguageCredential circuit specification
+     */
+    function _validateLanguageInputs(uint256[2] calldata publicSignals) 
         internal 
         pure 
         returns (bool) 
     {
-        if (publicSignals.length != 10) {
+        // Validate field bounds
+        uint256[] memory dynamicArray = new uint256[](2);
+        dynamicArray[0] = publicSignals[0];
+        dynamicArray[1] = publicSignals[1];
+        if (!ProofVerification.validatePublicInputs(dynamicArray)) {
             return false;
         }
-
-        if (!ProofVerification.validatePublicInputs(publicSignals)) {
-            return false;
-        }
-
+        
         uint256 languageCount = publicSignals[0];
-        uint256 totalLOCRange = publicSignals[2];
-        uint256 diversityScore = publicSignals[3];
-        uint256 proficiencyLevel = publicSignals[4];
-        uint256 frameworkCount = publicSignals[5];
-        uint256 projectCount = publicSignals[6];
-        uint256 consistencyScore = publicSignals[7];
-        uint256 learningTrend = publicSignals[8];
-        uint256 marketRelevance = publicSignals[9];
+        uint256 languageSetHash = publicSignals[1];
 
-        // Language count: 2-50 languages
+        // Language count should be reasonable (2-50 for meaningful proficiency)
         if (languageCount < 2 || languageCount > 50) {
             return false;
         }
 
-        // Total LOC range should be reasonable
-        if (totalLOCRange > 100000000) { // 100M LOC max
-            return false;
-        }
-
-        // Scores should be 0-100
-        if (diversityScore > 100 || consistencyScore > 100 || marketRelevance > 100) {
-            return false;
-        }
-
-        // Proficiency level should be valid enum
-        if (proficiencyLevel > uint256(ProficiencyLevel.EXPERT)) {
-            return false;
-        }
-
-        // Framework count should be reasonable
-        if (frameworkCount > 500) {
-            return false;
-        }
-
-        // Project count should be reasonable
-        if (projectCount == 0 || projectCount > 10000) {
-            return false;
-        }
-
-        // Learning trend should be valid (0, 1, or 2)
-        if (learningTrend > 2) {
+        // Language set hash should not be zero
+        if (languageSetHash == 0) {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * @dev Get language proficiency for user and language set
+     */
+    function getLanguageProficiency(address user, bytes32 languageSetHash) 
+        external 
+        view 
+        returns (uint256) 
+    {
+        return languageProficiency[user][languageSetHash];
+    }
+
+    /**
+     * @dev Check if user has proven proficiency in a language set
+     */
+    function hasLanguageProficiency(address user, bytes32 languageSetHash) 
+        external 
+        view 
+        returns (bool) 
+    {
+        return languageProficiency[user][languageSetHash] > 0;
     }
 
     /**
@@ -184,14 +239,14 @@ contract LanguageVerifier {
     }
 
     /**
-     * @dev Get user verification statistics
+     * @dev Get user verification count
      */
     function getUserVerificationCount(address user) external view returns (uint256) {
         return verificationCount[user];
     }
 
     /**
-     * @dev Check if proof was used
+     * @dev Check if proof has been used
      */
     function isProofUsed(bytes32 proofHash) external view returns (bool) {
         return usedProofs[proofHash];
@@ -201,21 +256,22 @@ contract LanguageVerifier {
      * @dev Transfer ownership
      */
     function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid new owner");
+        require(newOwner != address(0), "Invalid address");
         owner = newOwner;
     }
 
     /**
-     * @dev Encode verifying key
+     * @dev Get language info from public signals
      */
-    function _encodeVerifyingKey() internal view returns (bytes memory) {
-        return abi.encode(verifyingKey);
-    }
-
-    /**
-     * @dev Get contract version
-     */
-    function version() external pure returns (string memory) {
-        return "1.0.0";
+    function getLanguageInfo(uint256[2] calldata publicSignals) 
+        external 
+        pure 
+        returns (
+            uint256 languageCount,
+            bytes32 languageSetHash
+        ) 
+    {
+        languageCount = publicSignals[0];
+        languageSetHash = bytes32(publicSignals[1]);
     }
 } 

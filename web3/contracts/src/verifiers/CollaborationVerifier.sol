@@ -6,30 +6,43 @@ import "../../libraries/ProofVerification.sol";
 /**
  * @title CollaborationVerifier
  * @dev Verifies collaboration and teamwork credentials
- * Handles ZK proofs for collaboration verification with privacy preservation
+ * Matches the CollaborationCredential circuit specification exactly
+ * 
+ * Public inputs (5 total):
+ * [0] = userAddress (user's public address)
+ * [1] = minCollaborators (minimum collaborators claimed range)
+ * [2] = maxCollaborators (maximum collaborators claimed range)
+ * [3] = maxContributionPercent (max reasonable contribution %)
+ * [4] = teamDiversityScore (score representing team diversity)
  */
 contract CollaborationVerifier {
-    using ProofVerification for bytes32;
-
     // Verifying key for collaboration credential circuit
     ProofVerification.VerifyingKey public verifyingKey;
     
-    // Contract owner
+    // Contract owner for updates
     address public owner;
     
-    // Verification statistics
+    // Proof verification statistics
     mapping(address => uint256) public verificationCount;
     mapping(bytes32 => bool) public usedProofs;
+    
+    // Collaboration metrics
+    mapping(address => uint256) public collaboratorCounts;
+    mapping(address => uint256) public diversityScores;
     
     // Events
     event ProofVerified(
         address indexed user,
         bytes32 indexed proofHash,
         uint256 collaboratorCount,
+        uint256 diversityScore,
         uint256 timestamp
     );
     
-    event VerifyingKeyUpdated(address indexed updater, uint256 timestamp);
+    event VerifyingKeyUpdated(
+        address indexed updater,
+        uint256 timestamp
+    );
 
     // Errors
     error UnauthorizedAccess();
@@ -37,6 +50,7 @@ contract CollaborationVerifier {
     error InvalidCollaborationProof();
     error InvalidPublicInputs();
 
+    // Modifiers
     modifier onlyOwner() {
         if (msg.sender != owner) revert UnauthorizedAccess();
         _;
@@ -49,44 +63,56 @@ contract CollaborationVerifier {
 
     /**
      * @dev Verify collaboration credential proof
-     * @param proof ZK proof data
-     * @param publicSignals Public inputs for the circuit
+     * @param proof ZK proof data (encoded Groth16 proof)
+     * @param publicSignals Public inputs matching circuit specification
      * @return True if proof is valid
      */
     function verifyProof(
         bytes calldata proof,
-        uint256[] calldata publicSignals
+        uint256[5] calldata publicSignals
     ) external returns (bool) {
-        // Validate public inputs for collaboration credential
+        // Validate public inputs structure for collaboration credential circuit
         if (!_validateCollaborationInputs(publicSignals)) {
             revert InvalidPublicInputs();
         }
 
-        // Prevent proof replay
+        // Check proof hasn't been used before (prevent replay attacks)
         bytes32 proofHash = keccak256(proof);
         if (usedProofs[proofHash]) {
             revert ProofAlreadyUsed();
         }
 
-        // Verify ZK proof
+        // Convert array to dynamic array for library compatibility
+        uint256[] memory publicInputs = new uint256[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            publicInputs[i] = publicSignals[i];
+        }
+
+        // Verify proof using ProofVerification library
         bool isValid = ProofVerification.verifyEncodedProof(
             proof,
-            publicSignals,
-            _encodeVerifyingKey()
+            publicInputs,
+            abi.encode(verifyingKey)
         );
 
         if (!isValid) {
             revert InvalidCollaborationProof();
         }
 
-        // Update state
+        // Mark proof as used and update statistics
         usedProofs[proofHash] = true;
         verificationCount[msg.sender]++;
+
+        // Store collaboration metrics
+        uint256 avgCollaborators = (publicSignals[1] + publicSignals[2]) / 2;
+        collaboratorCounts[msg.sender] = avgCollaborators;
+        diversityScores[msg.sender] = publicSignals[4];
 
         emit ProofVerified(
             msg.sender, 
             proofHash, 
-            publicSignals[0], // collaborator count
+            avgCollaborators, 
+            publicSignals[4], 
             block.timestamp
         );
         
@@ -95,81 +121,82 @@ contract CollaborationVerifier {
 
     /**
      * @dev Validate collaboration credential public inputs
-     * Expected format:
-     * [0] = minCollaborators (minimum collaborators across repos)
-     * [1] = maxCollaborators (maximum collaborators in any repo)
-     * [2] = avgCollaborators (average collaborators per repo)
-     * [3] = repositoryCount (number of collaborative repositories)
-     * [4] = kAnonymityLevel (k-anonymity level maintained)
-     * [5] = contributionBalance (how balanced contributions are)
-     * [6] = leadershipScore (leadership in collaborative projects)
-     * [7] = mentorshipScore (mentoring other developers)
-     * [8] = communicationScore (communication effectiveness)
-     * [9] = isNonSoloContributor (1 if not solo contributor, 0 otherwise)
+     * Based on CollaborationCredential circuit specification
      */
-    function _validateCollaborationInputs(uint256[] calldata publicSignals) 
+    function _validateCollaborationInputs(uint256[5] calldata publicSignals) 
         internal 
         pure 
         returns (bool) 
     {
-        if (publicSignals.length != 10) {
+        // Validate field bounds
+        uint256[] memory dynamicArray = new uint256[](5);
+        for (uint256 i = 0; i < 5; i++) {
+            dynamicArray[i] = publicSignals[i];
+        }
+        if (!ProofVerification.validatePublicInputs(dynamicArray)) {
+            return false;
+        }
+        
+        uint256 userAddress = publicSignals[0];
+        uint256 minCollaborators = publicSignals[1];
+        uint256 maxCollaborators = publicSignals[2];
+        uint256 maxContributionPercent = publicSignals[3];
+        uint256 teamDiversityScore = publicSignals[4];
+
+        // User address should not be zero
+        if (userAddress == 0) {
             return false;
         }
 
-        if (!ProofVerification.validatePublicInputs(publicSignals)) {
+        // Collaborator range validation
+        if (minCollaborators > maxCollaborators || maxCollaborators > 1000) {
             return false;
         }
 
-        uint256 minCollaborators = publicSignals[0];
-        uint256 maxCollaborators = publicSignals[1];
-        uint256 avgCollaborators = publicSignals[2];
-        uint256 repositoryCount = publicSignals[3];
-        uint256 kAnonymityLevel = publicSignals[4];
-        uint256 contributionBalance = publicSignals[5];
-        uint256 leadershipScore = publicSignals[6];
-        uint256 mentorshipScore = publicSignals[7];
-        uint256 communicationScore = publicSignals[8];
-        uint256 isNonSoloContributor = publicSignals[9];
-
-        // Collaborator counts should be reasonable and consistent
-        if (minCollaborators == 0 || maxCollaborators == 0) {
+        // Minimum team size (at least 2 people including user)
+        if (minCollaborators < 1) {
             return false;
         }
 
-        if (minCollaborators > maxCollaborators) {
+        // Contribution percentage should be reasonable (max 95%)
+        if (maxContributionPercent > 95) {
             return false;
         }
 
-        if (maxCollaborators > 1000) { // Max 1000 collaborators
-            return false;
-        }
-
-        if (avgCollaborators < minCollaborators || avgCollaborators > maxCollaborators) {
-            return false;
-        }
-
-        // Repository count should be reasonable
-        if (repositoryCount == 0 || repositoryCount > 1000) {
-            return false;
-        }
-
-        // K-anonymity level should be at least 2
-        if (kAnonymityLevel < 2 || kAnonymityLevel > 100) {
-            return false;
-        }
-
-        // Scores should be 0-100
-        if (contributionBalance > 100 || leadershipScore > 100 || 
-            mentorshipScore > 100 || communicationScore > 100) {
-            return false;
-        }
-
-        // isNonSoloContributor should be boolean
-        if (isNonSoloContributor > 1) {
+        // Diversity score should be 0-100
+        if (teamDiversityScore > 100) {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * @dev Get collaboration metrics for user
+     */
+    function getCollaborationMetrics(address user) 
+        external 
+        view 
+        returns (
+            uint256 collaboratorCount,
+            uint256 diversityScore,
+            uint256 verificationCount_
+        ) 
+    {
+        collaboratorCount = collaboratorCounts[user];
+        diversityScore = diversityScores[user];
+        verificationCount_ = verificationCount[user];
+    }
+
+    /**
+     * @dev Check if user has proven collaboration skills
+     */
+    function hasCollaborationProof(address user) 
+        external 
+        view 
+        returns (bool) 
+    {
+        return verificationCount[user] > 0;
     }
 
     /**
@@ -184,14 +211,14 @@ contract CollaborationVerifier {
     }
 
     /**
-     * @dev Get user verification statistics
+     * @dev Get user verification count
      */
     function getUserVerificationCount(address user) external view returns (uint256) {
         return verificationCount[user];
     }
 
     /**
-     * @dev Check if proof was used
+     * @dev Check if proof has been used
      */
     function isProofUsed(bytes32 proofHash) external view returns (bool) {
         return usedProofs[proofHash];
@@ -201,21 +228,26 @@ contract CollaborationVerifier {
      * @dev Transfer ownership
      */
     function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid new owner");
+        require(newOwner != address(0), "Invalid address");
         owner = newOwner;
     }
 
     /**
-     * @dev Encode verifying key
+     * @dev Get collaboration info from public signals
      */
-    function _encodeVerifyingKey() internal view returns (bytes memory) {
-        return abi.encode(verifyingKey);
-    }
-
-    /**
-     * @dev Get contract version
-     */
-    function version() external pure returns (string memory) {
-        return "1.0.0";
+    function getCollaborationInfo(uint256[5] calldata publicSignals) 
+        external 
+        pure 
+        returns (
+            address userAddress,
+            uint256 collaboratorRange,
+            uint256 maxContributionPercent,
+            uint256 teamDiversityScore
+        ) 
+    {
+        userAddress = address(uint160(publicSignals[0]));
+        collaboratorRange = (publicSignals[2] << 128) | publicSignals[1]; // max << 128 | min
+        maxContributionPercent = publicSignals[3];
+        teamDiversityScore = publicSignals[4];
     }
 } 

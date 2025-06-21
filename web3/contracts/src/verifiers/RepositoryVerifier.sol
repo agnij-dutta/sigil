@@ -6,11 +6,21 @@ import "../../libraries/ProofVerification.sol";
 /**
  * @title RepositoryVerifier
  * @dev Verifies repository membership and contribution credentials
- * Handles ZK proofs for repository-specific developer contributions
+ * Matches the RepositoryCredential circuit specification exactly
+ * 
+ * Public inputs (10 total):
+ * [0] = repoHash (hashed repository identifier)
+ * [1] = userAddressPublic (user's Ethereum address)
+ * [2] = minCommits (minimum commits claimed range)
+ * [3] = maxCommits (maximum commits claimed range)
+ * [4] = minLOC (minimum LOC range)
+ * [5] = maxLOC (maximum LOC range)
+ * [6] = languageCount (number of languages used)
+ * [7] = minCollaborators (minimum collaborators range)
+ * [8] = maxCollaborators (maximum collaborators range)
+ * [9] = proofTimestamp (when proof was generated)
  */
 contract RepositoryVerifier {
-    using ProofVerification for bytes32;
-
     // Verifying key for repository credential circuit
     ProofVerification.VerifyingKey public verifyingKey;
     
@@ -25,6 +35,7 @@ contract RepositoryVerifier {
     event ProofVerified(
         address indexed user,
         bytes32 indexed proofHash,
+        bytes32 repoHash,
         uint256 timestamp
     );
     
@@ -52,15 +63,15 @@ contract RepositoryVerifier {
 
     /**
      * @dev Verify repository credential proof
-     * @param proof ZK proof data
-     * @param publicSignals Public inputs for the circuit
+     * @param proof ZK proof data (encoded Groth16 proof)
+     * @param publicSignals Public inputs matching circuit specification
      * @return True if proof is valid
      */
     function verifyProof(
         bytes calldata proof,
-        uint256[] calldata publicSignals
+        uint256[10] calldata publicSignals
     ) external returns (bool) {
-        // Validate public inputs structure for repository credential
+        // Validate public inputs structure for repository credential circuit
         if (!_validateRepositoryInputs(publicSignals)) {
             revert InvalidPublicInputs();
         }
@@ -71,11 +82,17 @@ contract RepositoryVerifier {
             revert ProofAlreadyUsed();
         }
 
-        // Verify the ZK proof
+        // Convert array to dynamic array for library compatibility
+        uint256[] memory publicInputs = new uint256[](10);
+        for (uint256 i = 0; i < 10; i++) {
+            publicInputs[i] = publicSignals[i];
+        }
+
+        // Verify proof using ProofVerification library
         bool isValid = ProofVerification.verifyEncodedProof(
             proof,
-            publicSignals,
-            _encodeVerifyingKey()
+            publicInputs,
+            abi.encode(verifyingKey)
         );
 
         if (!isValid) {
@@ -86,107 +103,72 @@ contract RepositoryVerifier {
         usedProofs[proofHash] = true;
         verificationCount[msg.sender]++;
 
-        emit ProofVerified(msg.sender, proofHash, block.timestamp);
+        emit ProofVerified(msg.sender, proofHash, bytes32(publicSignals[0]), block.timestamp);
         
         return true;
     }
 
     /**
-     * @dev Batch verify multiple repository proofs
-     * @param proofs Array of proof data
-     * @param publicSignalsArray Array of public inputs
-     * @return Array of verification results
-     */
-    function batchVerifyProofs(
-        bytes[] calldata proofs,
-        uint256[][] calldata publicSignalsArray
-    ) external returns (bool[] memory) {
-        require(proofs.length == publicSignalsArray.length, "Array length mismatch");
-        
-        bool[] memory results = new bool[](proofs.length);
-        
-        for (uint256 i = 0; i < proofs.length; i++) {
-            try this.verifyProof(proofs[i], publicSignalsArray[i]) returns (bool result) {
-                results[i] = result;
-            } catch {
-                results[i] = false;
-            }
-        }
-        
-        return results;
-    }
-
-    /**
      * @dev Validate repository credential public inputs
-     * Expected format:
-     * [0] = userAddressHash (user's address hash)
-     * [1] = repoHash (repository identifier hash)
-     * [2] = commitCountRange (encoded commit count range)
-     * [3] = locRange (encoded lines of code range)
-     * [4] = languageCount (number of languages used)
-     * [5] = collaboratorCount (number of collaborators)
-     * [6] = timeRangeStart (contribution start time)
-     * [7] = timeRangeEnd (contribution end time)
-     * [8] = qualityScore (contribution quality score)
-     * [9] = isNonOwner (1 if user is not repo owner, 0 otherwise)
+     * Based on RepositoryCredential circuit specification
      */
-    function _validateRepositoryInputs(uint256[] calldata publicSignals) 
+    function _validateRepositoryInputs(uint256[10] calldata publicSignals) 
         internal 
         pure 
         returns (bool) 
     {
-        // Must have exactly 10 public inputs
-        if (publicSignals.length != 10) {
-            return false;
-        }
-
         // Validate field bounds
-        if (!ProofVerification.validatePublicInputs(publicSignals)) {
+        uint256[] memory dynamicArray = new uint256[](10);
+        for (uint256 i = 0; i < 10; i++) {
+            dynamicArray[i] = publicSignals[i];
+        }
+        if (!ProofVerification.validatePublicInputs(dynamicArray)) {
             return false;
         }
 
-        // Validate specific constraints
-        uint256 commitCountRange = publicSignals[2];
-        uint256 locRange = publicSignals[3];
-        uint256 languageCount = publicSignals[4];
-        uint256 collaboratorCount = publicSignals[5];
-        uint256 timeRangeStart = publicSignals[6];
-        uint256 timeRangeEnd = publicSignals[7];
-        uint256 qualityScore = publicSignals[8];
-        uint256 isNonOwner = publicSignals[9];
+        uint256 repoHash = publicSignals[0];
+        uint256 userAddress = publicSignals[1];
+        uint256 minCommits = publicSignals[2];
+        uint256 maxCommits = publicSignals[3];
+        uint256 minLOC = publicSignals[4];
+        uint256 maxLOC = publicSignals[5];
+        uint256 languageCount = publicSignals[6];
+        uint256 minCollaborators = publicSignals[7];
+        uint256 maxCollaborators = publicSignals[8];
+        uint256 proofTimestamp = publicSignals[9];
 
-        // Commit count range should be reasonable (0-10000 commits)
-        if (commitCountRange > 10000) {
+        // Repository hash should not be zero
+        if (repoHash == 0) {
             return false;
         }
 
-        // LOC range should be reasonable (0-10M lines)
-        if (locRange > 10000000) {
+        // User address should not be zero
+        if (userAddress == 0) {
             return false;
         }
 
-        // Language count should be reasonable (1-50 languages)
+        // Commit range validation
+        if (minCommits > maxCommits || maxCommits > 100000) {
+            return false;
+        }
+
+        // LOC range validation
+        if (minLOC > maxLOC || maxLOC > 100000000) {
+            return false;
+        }
+
+        // Language count should be reasonable (1-50)
         if (languageCount == 0 || languageCount > 50) {
             return false;
         }
 
-        // Collaborator count should be reasonable (1-1000 collaborators)
-        if (collaboratorCount == 0 || collaboratorCount > 1000) {
+        // Collaborator range validation
+        if (minCollaborators > maxCollaborators || maxCollaborators > 10000) {
             return false;
         }
 
-        // Time range should be valid
-        if (timeRangeStart >= timeRangeEnd) {
-            return false;
-        }
-
-        // Quality score should be 0-100
-        if (qualityScore > 100) {
-            return false;
-        }
-
-        // isNonOwner should be boolean (0 or 1)
-        if (isNonOwner > 1) {
+        // Timestamp should be reasonable (not too far in future)
+        if (proofTimestamp > block.timestamp + 3600) { // 1 hour tolerance
             return false;
         }
 
@@ -195,7 +177,6 @@ contract RepositoryVerifier {
 
     /**
      * @dev Update verifying key (only owner)
-     * @param newVerifyingKey New verifying key
      */
     function updateVerifyingKey(ProofVerification.VerifyingKey calldata newVerifyingKey) 
         external 
@@ -206,18 +187,14 @@ contract RepositoryVerifier {
     }
 
     /**
-     * @dev Get verification statistics for a user
-     * @param user User address
-     * @return Number of successful verifications
+     * @dev Get user verification count
      */
     function getUserVerificationCount(address user) external view returns (uint256) {
         return verificationCount[user];
     }
 
     /**
-     * @dev Check if a proof has been used
-     * @param proofHash Hash of the proof
-     * @return True if proof was already used
+     * @dev Check if proof has been used
      */
     function isProofUsed(bytes32 proofHash) external view returns (bool) {
         return usedProofs[proofHash];
@@ -225,27 +202,9 @@ contract RepositoryVerifier {
 
     /**
      * @dev Transfer ownership
-     * @param newOwner New owner address
      */
     function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0), "Invalid new owner");
+        require(newOwner != address(0), "Invalid address");
         owner = newOwner;
-    }
-
-    /**
-     * @dev Encode verifying key for proof verification
-     * @return Encoded verifying key data
-     */
-    function _encodeVerifyingKey() internal view returns (bytes memory) {
-        // Simplified encoding - in practice would serialize full VK structure
-        return abi.encode(verifyingKey);
-    }
-
-    /**
-     * @dev Get contract version
-     * @return Version string
-     */
-    function version() external pure returns (string memory) {
-        return "1.0.0";
     }
 } 
