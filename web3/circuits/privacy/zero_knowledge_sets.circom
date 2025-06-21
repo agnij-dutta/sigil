@@ -1,7 +1,9 @@
 pragma circom 2.0.0;
 
-include "../core/primitives/merkle_tree.circom";
-include "../core/primitives/set_membership.circom";
+include "../core/primitives/merkle_tree_lib.circom";
+include "../core/primitives/set_membership_lib.circom";
+include "../core/primitives/range_proof_lib.circom";
+include "../core/utilities.circom";
 
 /*
     Zero Knowledge Sets Circuit
@@ -24,6 +26,7 @@ template ZeroKnowledgeSets(maxSetSize, hashDepth) {
     signal input setCommitment;                    // Commitment to the private set
     signal input elementToProve;                   // Element to prove membership for
     signal input membershipProof[hashDepth];       // Merkle proof for membership
+    signal input pathIndices[hashDepth];           // Path indices for Merkle proof
     signal input setSize;                          // Size of the set
     signal input intersectionSize;                 // Size of intersection with another set
     signal input unionSize;                        // Size of union with another set
@@ -47,7 +50,6 @@ template ZeroKnowledgeSets(maxSetSize, hashDepth) {
     
     // Components for verification
     component merkleVerifier = MerkleTreeVerifier(hashDepth);
-    component setMembershipVerifier = SetMembershipVerifier(maxSetSize);
     component rangeProofs[5];
     
     // Verify membership proof using Merkle tree
@@ -55,8 +57,9 @@ template ZeroKnowledgeSets(maxSetSize, hashDepth) {
     merkleVerifier.leaf <== elementToProve;
     for (var i = 0; i < hashDepth; i++) {
         merkleVerifier.pathElements[i] <== membershipProof[i];
+        merkleVerifier.pathIndices[i] <== pathIndices[i];
     }
-    membershipValid <== merkleVerifier.isValid;
+    membershipValid <== merkleVerifier.valid;
     
     // Set membership based on operation type
     component operationSelector = OperationSelector(4);
@@ -66,10 +69,10 @@ template ZeroKnowledgeSets(maxSetSize, hashDepth) {
     isMember <== operationSelector.selectedResult;
     
     // Validate set cardinality
-    component setSizeRange = RangeProof(maxSetSize + 1);
+    component setSizeRange = RangeProofCustom(32);
     setSizeRange.value <== setSize;
-    setSizeRange.minValue <== 0;
-    setSizeRange.maxValue <== maxSetSize;
+    setSizeRange.min <== 0;
+    setSizeRange.max <== maxSetSize;
     
     component setSizePositive = GreaterThan(16);
     setSizePositive.in[0] <== setSize;
@@ -78,61 +81,72 @@ template ZeroKnowledgeSets(maxSetSize, hashDepth) {
     setCardinalityValid <== cardinalityCheck;
     
     // Validate intersection size
-    component intersectionRange = RangeProof(maxSetSize + 1);
+    component intersectionRange = RangeProofCustom(32);
     intersectionRange.value <== intersectionSize;
-    intersectionRange.minValue <== 0;
-    intersectionRange.maxValue <== maxSetSize;
+    intersectionRange.min <== 0;
+    intersectionRange.max <== maxSetSize;
     
-    component intersectionLogical = LessThanOrEqual(16);
+    component intersectionLogical = LessEqThan(16);
     intersectionLogical.in[0] <== intersectionSize;
     intersectionLogical.in[1] <== setSize;
     intersectionCheck <== intersectionLogical.out;
     intersectionValid <== intersectionCheck;
     
     // Validate union size
-    component unionRange = RangeProof(maxSetSize * 2 + 1);
+    component unionRange = RangeProofCustom(32);
     unionRange.value <== unionSize;
-    unionRange.minValue <== setSize; // Union is at least as large as the set
-    unionRange.maxValue <== maxSetSize * 2; // Union is at most twice max set size
+    unionRange.min <== setSize; // Union is at least as large as the set
+    unionRange.max <== maxSetSize * 2; // Union is at most twice max set size
     
-    component unionLogical = GreaterThanOrEqual(16);
+    component unionLogical = GreaterEqThan(16);
     unionLogical.in[0] <== unionSize;
     unionLogical.in[1] <== setSize;
     unionCheck <== unionLogical.out;
     unionValid <== unionCheck;
     
     // Validate operation type
-    component operationTypeRange = RangeProof(5);
+    component operationTypeRange = RangeProofCustom(32);
     operationTypeRange.value <== operationType;
-    operationTypeRange.minValue <== 1;
-    operationTypeRange.maxValue <== 4;
+    operationTypeRange.min <== 1;
+    operationTypeRange.max <== 4;
     
-    // Calculate operation result based on type
-    var membershipResult = isMember;
-    var intersectionResult = intersectionValid;
-    var unionResult = unionValid;
-    var differenceResult = (setSize > intersectionSize) ? 1 : 0;
+    // Calculate operation result based on type using proper constraints
+    component operationSelector1 = IsEqual();
+    operationSelector1.in[0] <== operationType;
+    operationSelector1.in[1] <== 1;
     
-    // Select result based on operation type
-    var selectedResult = 0;
-    if (operationType == 1) {
-        selectedResult = membershipResult;
-    } else if (operationType == 2) {
-        selectedResult = intersectionResult;
-    } else if (operationType == 3) {
-        selectedResult = unionResult;
-    } else if (operationType == 4) {
-        selectedResult = differenceResult;
-    }
+    component operationSelector2 = IsEqual();
+    operationSelector2.in[0] <== operationType;
+    operationSelector2.in[1] <== 2;
     
-    operationResult <== selectedResult;
-    operationValid <== (selectedResult == 1) ? 1 : 0;
+    component operationSelector3 = IsEqual();
+    operationSelector3.in[0] <== operationType;
+    operationSelector3.in[1] <== 3;
     
-    // Calculate privacy level
-    var membershipPrivacy = (membershipValid && operationType == 1) ? 25 : 0;
-    var cardinalityPrivacy = cardinalityCheck ? 25 : 0;
-    var intersectionPrivacy = (intersectionValid && operationType == 2) ? 25 : 0;
-    var unionPrivacy = (unionValid && operationType == 3) ? 25 : 0;
+    component operationSelector4 = IsEqual();
+    operationSelector4.in[0] <== operationType;
+    operationSelector4.in[1] <== 4;
+    
+    // Difference check
+    component differenceCheck = GreaterThan(16);
+    differenceCheck.in[0] <== setSize;
+    differenceCheck.in[1] <== intersectionSize;
+    
+    // Calculate weighted result
+    signal weightedResults[4];
+    weightedResults[0] <== operationSelector1.out * isMember;
+    weightedResults[1] <== operationSelector2.out * intersectionValid;
+    weightedResults[2] <== operationSelector3.out * unionValid;
+    weightedResults[3] <== operationSelector4.out * differenceCheck.out;
+    
+    operationResult <== weightedResults[0] + weightedResults[1] + weightedResults[2] + weightedResults[3];
+    operationValid <== operationResult;
+    
+    // Calculate privacy level using proper constraints
+    signal membershipPrivacy <== membershipValid * operationSelector1.out * 25;
+    signal cardinalityPrivacy <== cardinalityCheck * 25;
+    signal intersectionPrivacy <== intersectionValid * operationSelector2.out * 25;
+    signal unionPrivacy <== unionValid * operationSelector3.out * 25;
     
     privacyLevel <== membershipPrivacy + cardinalityPrivacy + intersectionPrivacy + unionPrivacy;
     
@@ -143,30 +157,30 @@ template ZeroKnowledgeSets(maxSetSize, hashDepth) {
     setCardinalityValid === 1;
     
     // Range proofs for all outputs
-    rangeProofs[0] = RangeProof(2);
+    rangeProofs[0] = RangeProofCustom(32);
     rangeProofs[0].value <== isMember;
-    rangeProofs[0].minValue <== 0;
-    rangeProofs[0].maxValue <== 1;
+    rangeProofs[0].min <== 0;
+    rangeProofs[0].max <== 1;
     
-    rangeProofs[1] = RangeProof(2);
+    rangeProofs[1] = RangeProofCustom(32);
     rangeProofs[1].value <== operationResult;
-    rangeProofs[1].minValue <== 0;
-    rangeProofs[1].maxValue <== 1;
+    rangeProofs[1].min <== 0;
+    rangeProofs[1].max <== 1;
     
-    rangeProofs[2] = RangeProof(101);
+    rangeProofs[2] = RangeProofCustom(32);
     rangeProofs[2].value <== privacyLevel;
-    rangeProofs[2].minValue <== 0;
-    rangeProofs[2].maxValue <== 100;
+    rangeProofs[2].min <== 0;
+    rangeProofs[2].max <== 100;
     
-    rangeProofs[3] = RangeProof(maxSetSize + 1);
+    rangeProofs[3] = RangeProofCustom(32);
     rangeProofs[3].value <== intersectionSize;
-    rangeProofs[3].minValue <== 0;
-    rangeProofs[3].maxValue <== maxSetSize;
+    rangeProofs[3].min <== 0;
+    rangeProofs[3].max <== maxSetSize;
     
-    rangeProofs[4] = RangeProof(maxSetSize * 2 + 1);
+    rangeProofs[4] = RangeProofCustom(32);
     rangeProofs[4].value <== unionSize;
-    rangeProofs[4].minValue <== 0;
-    rangeProofs[4].maxValue <== maxSetSize * 2;
+    rangeProofs[4].min <== 0;
+    rangeProofs[4].max <== maxSetSize * 2;
 }
 
 /*
@@ -198,15 +212,15 @@ template PrivateSetIntersection(maxSetSize, hashDepth) {
     signal commitmentValid;                        // Commitment validation
     
     // Validate intersection size constraints
-    component intersectionSizeLTE_A = LessThanOrEqual(16);
-    intersectionSizeLTE_A.in[0] <== intersectionSize;
-    intersectionSizeLTE_A.in[1] <== setASize;
-    
-    component intersectionSizeLTE_B = LessThanOrEqual(16);
-    intersectionSizeLTE_B.in[0] <== intersectionSize;
-    intersectionSizeLTE_B.in[1] <== setBSize;
-    
-    component intersectionSizeGTE = GreaterThanOrEqual(16);
+        component intersectionSizeLTE_A = LessEqThan(16);
+        intersectionSizeLTE_A.in[0] <== intersectionSize;
+        intersectionSizeLTE_A.in[1] <== setASize;
+        
+        component intersectionSizeLTE_B = LessEqThan(16);
+        intersectionSizeLTE_B.in[0] <== intersectionSize;
+        intersectionSizeLTE_B.in[1] <== setBSize;
+        
+        component intersectionSizeGTE = GreaterEqThan(16);
     intersectionSizeGTE.in[0] <== intersectionSize;
     intersectionSizeGTE.in[1] <== 0;
     
@@ -244,6 +258,7 @@ template PrivateSetIntersection(maxSetSize, hashDepth) {
             membershipChecks[i * 2].operationType <== 1; // Membership operation
             for (var j = 0; j < hashDepth; j++) {
                 membershipChecks[i * 2].membershipProof[j] <== 0; // Simplified for this example
+                membershipChecks[i * 2].pathIndices[j] <== 0; // Simplified for this example
             }
             
             // Check membership in set B
@@ -257,6 +272,7 @@ template PrivateSetIntersection(maxSetSize, hashDepth) {
             membershipChecks[i * 2 + 1].operationType <== 1; // Membership operation
             for (var j = 0; j < hashDepth; j++) {
                 membershipChecks[i * 2 + 1].membershipProof[j] <== 0; // Simplified for this example
+                membershipChecks[i * 2 + 1].pathIndices[j] <== 0; // Simplified for this example
             }
             
             membershipValid *= membershipChecks[i * 2].isMember * membershipChecks[i * 2 + 1].isMember;
@@ -310,17 +326,27 @@ template PrivateSetUnionSize(maxSetSize, numHashFunctions) {
     signal sizeConstraints;                        // Size constraint validation
     signal accuracyScore;                          // Accuracy scoring
     
+    // Components for MinHash validation
+    component minHashRange[numHashFunctions];
+    component seedRange[numHashFunctions];
+    
+    // Initialize components
+    for (var i = 0; i < numHashFunctions; i++) {
+        minHashRange[i] = RangeProofCustom(32);
+        seedRange[i] = RangeProofCustom(32);
+    }
+    
     // Validate union size constraints
     // Union size should be: max(|A|, |B|) <= |A ∪ B| <= |A| + |B|
     component unionLowerBound = MaxOfTwo();
     unionLowerBound.a <== setASize;
     unionLowerBound.b <== setBSize;
     
-    component unionLowerCheck = GreaterThanOrEqual(16);
+    component unionLowerCheck = GreaterEqThan(16);
     unionLowerCheck.in[0] <== unionSizeEstimate;
     unionLowerCheck.in[1] <== unionLowerBound.max;
     
-    component unionUpperCheck = LessThanOrEqual(16);
+    component unionUpperCheck = LessEqThan(16);
     unionUpperCheck.in[0] <== unionSizeEstimate;
     unionUpperCheck.in[1] <== setASize + setBSize;
     
@@ -329,17 +355,15 @@ template PrivateSetUnionSize(maxSetSize, numHashFunctions) {
     // Validate MinHash computation
     var minHashValidSum = 0;
     for (var i = 0; i < numHashFunctions; i++) {
-        component minHashRange = RangeProof(1000001);
-        minHashRange.value <== minHashValues[i];
-        minHashRange.minValue <== 0;
-        minHashRange.maxValue <== 1000000;
+        minHashRange[i].value <== minHashValues[i];
+        minHashRange[i].min <== 0;
+        minHashRange[i].max <== 1000000;
         
-        component seedRange = RangeProof(1000001);
-        seedRange.value <== hashSeeds[i];
-        seedRange.minValue <== 1;
-        seedRange.maxValue <== 1000000;
+        seedRange[i].value <== hashSeeds[i];
+        seedRange[i].min <== 1;
+        seedRange[i].max <== 1000000;
         
-        minHashValid[i] <== minHashRange.isValid * seedRange.isValid;
+        minHashValid[i] <== minHashRange[i].valid * seedRange[i].valid;
         minHashValidSum += minHashValid[i];
     }
     
@@ -399,7 +423,7 @@ template PrivateSetUnionSize(maxSetSize, numHashFunctions) {
     unionSizeValid === 1;
     
     // Constraint: Privacy level must be sufficient
-    component privacyCheck = GreaterThanOrEqual(8);
+    component privacyCheck = GreaterEqThan(8);  
     privacyCheck.in[0] <== privacyLevel;
     privacyCheck.in[1] <== 70; // Minimum 70% privacy level
     privacyCheck.out === 1;
@@ -422,105 +446,14 @@ template MaxOfTwo() {
     signal input b;
     signal output max;
     
-    component gte = GreaterThanOrEqual(16);
+    component gte = GreaterEqThan(16);
     gte.in[0] <== a;
     gte.in[1] <== b;
     
     max <== gte.out * a + (1 - gte.out) * b;
 }
 
-template IsEqual() {
-    signal input in[2];
-    signal output out;
-    
-    component isz = IsZero();
-    isz.in <== in[1] - in[0];
-    out <== isz.out;
-}
+// Templates removed - using utilities.circom versions instead
+// RangeProof template removed - using range_proof_lib.circom instead
 
-template IsZero() {
-    signal input in;
-    signal output out;
-    
-    signal inv;
-    inv <-- in != 0 ? 1/in : 0;
-    out <== -in * inv + 1;
-    in * out === 0;
-}
-
-// Include utility templates from other files
-template RangeProof(n) {
-    signal input value;
-    signal input minValue;
-    signal input maxValue;
-    signal output isValid;
-    
-    component gte = GreaterThanOrEqual(16);
-    gte.in[0] <== value;
-    gte.in[1] <== minValue;
-    
-    component lte = LessThanOrEqual(16);
-    lte.in[0] <== value;
-    lte.in[1] <== maxValue;
-    
-    isValid <== gte.out * lte.out;
-}
-
-template GreaterThanOrEqual(n) {
-    signal input in[2];
-    signal output out;
-    
-    component gt = GreaterThan(n);
-    gt.in[0] <== in[0];
-    gt.in[1] <== in[1] - 1;
-    out <== gt.out;
-}
-
-template LessThanOrEqual(n) {
-    signal input in[2];
-    signal output out;
-    
-    component lt = LessThan(n);
-    lt.in[0] <== in[0] + 1;
-    lt.in[1] <== in[1] + 1;
-    out <== lt.out;
-}
-
-template GreaterThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component lt = LessThan(n + 1);
-    lt.in[0] <== in[1] + 1;
-    lt.in[1] <== in[0] + (1 << n);
-    out <== lt.out;
-}
-
-template LessThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component num2Bits = Num2Bits(n + 1);
-    num2Bits.in <== in[0] + (1 << n) - in[1];
-    out <== 1 - num2Bits.out[n];
-}
-
-template Num2Bits(n) {
-    signal input in;
-    signal output out[n];
-    var lc1 = 0;
-    var e2 = 1;
-    
-    for (var i = 0; i < n; i++) {
-        out[i] <-- (in >> i) & 1;
-        out[i] * (out[i] - 1) === 0;
-        lc1 += out[i] * e2;
-        e2 = e2 + e2;
-    }
-    
-    lc1 === in;
-}
-
-component main = ZKSetOperations(10, 5);
+component main = ZeroKnowledgeSets(10, 5);

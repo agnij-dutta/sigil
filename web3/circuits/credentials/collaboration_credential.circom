@@ -1,6 +1,6 @@
 pragma circom 2.0.0;
 
-include "../core/primitives/range_proof.circom";
+include "../core/primitives/range_proof_lib.circom";
 include "../privacy/k_anonymity.circom";
 include "../privacy/zero_knowledge_sets.circom";
 

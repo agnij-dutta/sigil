@@ -1,8 +1,8 @@
 pragma circom 2.0.0;
 
 include "../core/utilities.circom";
-include "../core/primitives/range_proof.circom";
-include "../core/primitives/hash_chain.circom";
+include "../core/primitives/range_proof_lib.circom";
+include "../core/primitives/hash_chain_lib.circom";
 
 /*
     ConsistencyCredential: Proves temporal consistency of developer contributions

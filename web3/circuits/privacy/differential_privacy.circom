@@ -47,15 +47,15 @@ template NoiseCalibrationCheck(precision) {
     expectedScale <== divider.quotient;
     
     // Check if noise is within reasonable bounds of expected scale
-    component absNoise = AbsoluteValue(precision);
-    absNoise.value <== noiseValue;
+    component absNoise = AbsoluteValue();
+    absNoise.in <== noiseValue;
     
     component upperBound = LessThan(precision);
-    upperBound.in[0] <== absNoise.absValue;
+    upperBound.in[0] <== absNoise.out;
     upperBound.in[1] <== expectedScale * 10; // Allow 10x scale for randomness
     
     component lowerBound = GreaterThan(precision);
-    lowerBound.in[0] <== absNoise.absValue * 10;
+    lowerBound.in[0] <== absNoise.out * 10;
     lowerBound.in[1] <== expectedScale;
     
     // Both bounds must be satisfied
@@ -103,83 +103,6 @@ template ComposedPrivacy(numQueries) {
     isValid <== epsilonCheck.out;
 }
 
-/*
- * Safe division template
- */
-template SafeDivision(n) {
-    signal input dividend;
-    signal input divisor;
-    signal output quotient;
-    signal output remainder;
-    
-    quotient <-- dividend \ divisor;
-    remainder <-- dividend % divisor;
-    
-    dividend === quotient * divisor + remainder;
-    
-    component ltDivisor = LessThan(n);
-    ltDivisor.in[0] <== remainder;
-    ltDivisor.in[1] <== divisor;
-}
-
-/*
- * Absolute value calculation
- */
-template AbsoluteValue(n) {
-    signal input value;
-    signal output absValue;
-    signal output sign;
-    
-    component isNegative = LessThan(n);
-    isNegative.in[0] <== value;
-    isNegative.in[1] <== 0;
-    
-    sign <== isNegative.out;
-    absValue <== (1 - 2 * sign) * value;
-}
-
-template AND() {
-    signal input a;
-    signal input b;
-    signal output out;
-    out <== a * b;
-}
-
-template GreaterThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component lt = LessThan(n + 1);
-    lt.in[0] <== in[1] + 1;
-    lt.in[1] <== in[0] + (1 << n);
-    out <== lt.out;
-}
-
-template LessThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component num2Bits = Num2Bits(n + 1);
-    num2Bits.in <== in[0] + (1 << n) - in[1];
-    out <== 1 - num2Bits.out[n];
-}
-
-template Num2Bits(n) {
-    signal input in;
-    signal output out[n];
-    var lc1 = 0;
-    var e2 = 1;
-    
-    for (var i = 0; i < n; i++) {
-        out[i] <-- (in >> i) & 1;
-        out[i] * (out[i] - 1) === 0;
-        lc1 += out[i] * e2;
-        e2 = e2 + e2;
-    }
-    
-    lc1 === in;
-}
+// All utility templates are now included from utilities.circom
 
 component main = DifferentialPrivacy(32);

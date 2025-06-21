@@ -1,7 +1,7 @@
 pragma circom 2.0.0;
 
 include "../core/utilities.circom";
-include "../core/primitives/range_proof.circom";
+include "../core/primitives/range_proof_lib.circom";
 
 /*
     K-Anonymity Privacy Circuit
@@ -56,6 +56,20 @@ template KAnonymity(maxGroupSize, maxAttributes) {
     component rangeProofs[maxAttributes * 4];
     var rangeProofIndex = 0;
     
+    // Components for attribute protection calculation
+    component suppressionEq[maxAttributes];
+    component generalizationNeq[maxAttributes];
+    component generalizationNot[maxAttributes];
+    component protectionOr[maxAttributes];
+    
+    // Initialize components
+    for (var i = 0; i < maxAttributes; i++) {
+        suppressionEq[i] = IsEqual();
+        generalizationNeq[i] = IsEqual();
+        generalizationNot[i] = NOT();
+        protectionOr[i] = OR();
+    }
+    
     var protectedAttributes = 0;
     var totalSuppression = 0;
     var totalGeneralization = 0;
@@ -76,25 +90,21 @@ template KAnonymity(maxGroupSize, maxAttributes) {
         rangeProofIndex++;
         
         // Calculate attribute protection level
-        component suppressionEq = IsEqual();
-        suppressionEq.in[0] <== suppressionFlags[i];
-        suppressionEq.in[1] <== 1;
+        suppressionEq[i].in[0] <== suppressionFlags[i];
+        suppressionEq[i].in[1] <== 1;
         
-        component generalizationNeq = IsEqual();
-        generalizationNeq.in[0] <== generalizedValues[i];
-        generalizationNeq.in[1] <== quasiIdentifiers[i];
+        generalizationNeq[i].in[0] <== generalizedValues[i];
+        generalizationNeq[i].in[1] <== quasiIdentifiers[i];
         
-        component generalizationNot = NOT();
-        generalizationNot.in <== generalizationNeq.out;
+        generalizationNot[i].in <== generalizationNeq[i].out;
         
-        component protectionOr = OR();
-        protectionOr.a <== suppressionEq.out;
-        protectionOr.b <== generalizationNot.out;
+        protectionOr[i].a <== suppressionEq[i].out;
+        protectionOr[i].b <== generalizationNot[i].out;
         
-        attributeProtection[i] <== protectionOr.out;
+        attributeProtection[i] <== protectionOr[i].out;
         protectedAttributes += attributeProtection[i];
         totalSuppression += suppressionFlags[i];
-        totalGeneralization += generalizationNot.out;
+        totalGeneralization += generalizationNot[i].out;
     }
     
     suppressionCount <== totalSuppression;
@@ -228,41 +238,6 @@ template LessThanOrEqual(n) {
     out <== lt.out;
 }
 
-template GreaterThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component lt = LessThan(n + 1);
-    lt.in[0] <== in[1] + 1;
-    lt.in[1] <== in[0] + (1 << n);
-    out <== lt.out;
-}
-
-template LessThan(n) {
-    assert(n <= 252);
-    signal input in[2];
-    signal output out;
-    
-    component num2Bits = Num2Bits(n + 1);
-    num2Bits.in <== in[0] + (1 << n) - in[1];
-    out <== 1 - num2Bits.out[n];
-}
-
-template Num2Bits(n) {
-    signal input in;
-    signal output out[n];
-    var lc1 = 0;
-    var e2 = 1;
-    
-    for (var i = 0; i < n; i++) {
-        out[i] <-- (in >> i) & 1;
-        out[i] * (out[i] - 1) === 0;
-        lc1 += out[i] * e2;
-        e2 = e2 + e2;
-    }
-    
-    lc1 === in;
-}
+// Templates removed - using utilities.circom versions instead
 
 component main = KAnonymity(20, 10);

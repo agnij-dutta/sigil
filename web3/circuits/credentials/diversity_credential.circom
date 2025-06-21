@@ -1,8 +1,9 @@
 pragma circom 2.0.0;
 
-include "../core/primitives/merkle_tree.circom";
-include "../core/primitives/range_proof.circom";
-include "../core/primitives/set_membership.circom";
+include "../core/primitives/merkle_tree_lib.circom";
+include "../core/primitives/range_proof_lib.circom";
+include "../core/primitives/set_membership_lib.circom";
+include "../core/utilities.circom";
 
 /*
     DiversityCredential: Proves skill diversity across technologies and domains
