@@ -1,6 +1,6 @@
 'use client';
 
-import { useUser } from "@civic/auth-web3/react";
+import { useWallet } from "../../../web3/wallet/hooks/useWallet";
 import { useEffect } from 'react';
 
 interface CivicAuthButtonProps {
@@ -14,23 +14,35 @@ export default function CivicAuthButton({
   onSuccess,
   onError 
 }: CivicAuthButtonProps) {
-  const { user, signIn, signOut, isLoading, error } = useUser();
+  const { 
+    wallet,
+    civicAuth, 
+    isCivicAuthenticating, 
+    civicError,
+    connectWallet,
+    authenticateWithCivic, 
+    disconnectWallet,
+    isAuthenticated 
+  } = useWallet();
 
   useEffect(() => {
-    if (error && onError) {
-      onError(error);
+    if (civicError && onError) {
+      onError(new Error(civicError));
     }
-  }, [error, onError]);
+  }, [civicError, onError]);
 
   useEffect(() => {
-    if (user && onSuccess) {
+    if (civicAuth?.verified && onSuccess) {
       onSuccess();
     }
-  }, [user, onSuccess]);
+  }, [civicAuth, onSuccess]);
 
   const handleSignIn = async () => {
     try {
-      await signIn();
+      if (!wallet) {
+        await connectWallet();
+      }
+      await authenticateWithCivic();
     } catch (err) {
       console.error('Civic auth error:', err);
       if (onError) {
@@ -41,7 +53,7 @@ export default function CivicAuthButton({
 
   const handleSignOut = async () => {
     try {
-      await signOut();
+      await disconnectWallet();
     } catch (err) {
       console.error('Civic signout error:', err);
       if (onError) {
@@ -50,11 +62,11 @@ export default function CivicAuthButton({
     }
   };
 
-  if (user) {
+  if (isAuthenticated && civicAuth?.verified) {
     return (
       <button
         onClick={handleSignOut}
-        disabled={isLoading}
+        disabled={isCivicAuthenticating}
         className={`
           relative inline-flex items-center justify-center px-6 py-3
           bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800
@@ -63,7 +75,7 @@ export default function CivicAuthButton({
           ${className}
         `}
       >
-        {isLoading ? (
+        {isCivicAuthenticating ? (
           <div className="flex items-center space-x-2">
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             <span>Disconnecting...</span>
@@ -88,7 +100,7 @@ export default function CivicAuthButton({
   return (
     <button
       onClick={handleSignIn}
-      disabled={isLoading}
+      disabled={isCivicAuthenticating}
       className={`
         relative inline-flex items-center justify-center px-6 py-3
         bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700
@@ -97,7 +109,7 @@ export default function CivicAuthButton({
         ${className}
       `}
     >
-      {isLoading ? (
+      {isCivicAuthenticating ? (
         <div className="flex items-center space-x-2">
           <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
           <span>Connecting...</span>
