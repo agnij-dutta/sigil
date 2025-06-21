@@ -6,7 +6,7 @@ import "./LanguageVerifier.sol";
 import "./CollaborationVerifier.sol";
 import "./AggregateVerifier.sol";
 import "../interfaces/ISigilVerifier.sol";
-import "../libraries/ProofVerification.sol";
+import "../../libraries/ProofVerification.sol";
 
 /**
  * @title SigilCredentialVerifier
@@ -22,57 +22,18 @@ contract SigilCredentialVerifier is ISigilVerifier {
     CollaborationVerifier public immutable collaborationVerifier;
     AggregateVerifier public immutable aggregateVerifier;
 
-    // Credential registry
-    mapping(address => mapping(bytes32 => bool)) public verifiedCredentials;
-    mapping(address => uint256) public credentialCount;
-    mapping(bytes32 => CredentialMetadata) public credentialMetadata;
+    // Credential registry - implementing interface requirements
+    mapping(address => mapping(bytes32 => bool)) public override verifiedCredentials;
+    mapping(address => uint256) public override credentialCount;
+    mapping(bytes32 => CredentialMetadata) public override credentialMetadata;
 
-    // Events
-    event CredentialVerified(
-        address indexed user,
-        bytes32 indexed credentialHash,
-        CredentialType credentialType,
-        uint256 timestamp
-    );
+    // Emergency pause functionality
+    bool public override paused = false;
     
-    event CredentialRevoked(
-        address indexed user,
-        bytes32 indexed credentialHash,
-        uint256 timestamp
-    );
-
-    // Structs
-    struct CredentialMetadata {
-        CredentialType credentialType;
-        uint256 issuedAt;
-        uint256 expiresAt;
-        bool isRevoked;
-        string ipfsHash; // Optional IPFS storage
+    modifier whenNotPaused() {
+        require(!paused, "Contract is paused");
+        _;
     }
-
-    enum CredentialType {
-        REPOSITORY,
-        LANGUAGE,
-        COLLABORATION,
-        AGGREGATE,
-        COMPOSITE
-    }
-
-    struct CompositeCredential {
-        bool hasRepository;
-        bool hasLanguage;
-        bool hasCollaboration;
-        bool hasAggregate;
-        uint256 totalScore;
-        uint256 diversityScore;
-    }
-
-    // Errors
-    error InvalidProof();
-    error CredentialExpired();
-    error CredentialNotFound();
-    error CredentialAlreadyRevoked();
-    error UnauthorizedRevocation();
 
     constructor(
         address _repositoryVerifier,
@@ -96,7 +57,7 @@ contract SigilCredentialVerifier is ISigilVerifier {
         bytes calldata proofData,
         uint256[] calldata publicSignals,
         CredentialMetadata calldata metadata
-    ) external returns (bytes32 credentialHash) {
+    ) external override whenNotPaused returns (bytes32 credentialHash) {
         require(block.timestamp <= metadata.expiresAt, "Credential expired");
 
         // Decode proof data
@@ -201,7 +162,7 @@ contract SigilCredentialVerifier is ISigilVerifier {
         bytes calldata proof,
         uint256[] calldata publicSignals,
         uint256 expiresAt
-    ) external returns (bytes32 credentialHash) {
+    ) external override whenNotPaused returns (bytes32 credentialHash) {
         require(block.timestamp <= expiresAt, "Credential expired");
 
         bool isValid = false;
@@ -246,7 +207,7 @@ contract SigilCredentialVerifier is ISigilVerifier {
     /**
      * @dev Check if a credential is valid and not expired
      */
-    function isCredentialValid(bytes32 credentialHash) external view returns (bool) {
+    function isCredentialValid(bytes32 credentialHash) external view override returns (bool) {
         CredentialMetadata memory metadata = credentialMetadata[credentialHash];
         
         return !metadata.isRevoked && 
@@ -257,7 +218,7 @@ contract SigilCredentialVerifier is ISigilVerifier {
     /**
      * @dev Get credential details
      */
-    function getCredential(bytes32 credentialHash) external view returns (
+    function getCredentialDetails(bytes32 credentialHash) external view override returns (
         CredentialType credentialType,
         uint256 issuedAt,
         uint256 expiresAt,
@@ -278,7 +239,7 @@ contract SigilCredentialVerifier is ISigilVerifier {
     /**
      * @dev Get user's credential summary
      */
-    function getUserCredentialSummary(address user) external view returns (CompositeCredential memory) {
+    function getUserCredentialSummary(address user) external view override returns (CompositeCredential memory) {
         // This would iterate through user's credentials and build summary
         // For simplicity, returning a mock structure
         return CompositeCredential({
@@ -294,7 +255,7 @@ contract SigilCredentialVerifier is ISigilVerifier {
     /**
      * @dev Revoke a credential (only by credential owner)
      */
-    function revokeCredential(bytes32 credentialHash) external {
+    function revokeCredential(bytes32 credentialHash) external override {
         if (!verifiedCredentials[msg.sender][credentialHash]) {
             revert CredentialNotFound();
         }
@@ -314,12 +275,14 @@ contract SigilCredentialVerifier is ISigilVerifier {
     /**
      * @dev Update IPFS hash for a credential
      */
-    function updateCredentialIPFS(bytes32 credentialHash, string calldata ipfsHash) external {
+    function updateCredentialIPFS(bytes32 credentialHash, string calldata ipfsHash) external override {
         if (!verifiedCredentials[msg.sender][credentialHash]) {
             revert CredentialNotFound();
         }
 
         credentialMetadata[credentialHash].ipfsHash = ipfsHash;
+        
+        emit CredentialUpdated(msg.sender, credentialHash, ipfsHash);
     }
 
     /**
@@ -330,7 +293,7 @@ contract SigilCredentialVerifier is ISigilVerifier {
         bytes[] calldata proofs,
         uint256[][] calldata publicSignals,
         uint256[] calldata expirationTimes
-    ) external returns (bytes32[] memory credentialHashes) {
+    ) external override whenNotPaused returns (bytes32[] memory credentialHashes) {
         require(
             types.length == proofs.length && 
             proofs.length == publicSignals.length && 
@@ -353,22 +316,15 @@ contract SigilCredentialVerifier is ISigilVerifier {
     }
 
     /**
-     * @dev Emergency pause functionality (would require access control in production)
+     * @dev Emergency pause functionality
      */
-    bool public paused = false;
-    
-    modifier whenNotPaused() {
-        require(!paused, "Contract is paused");
-        _;
-    }
-
-    function pause() external {
-        // Would require proper access control
+    function pause() external override {
+        // Would require proper access control in production
         paused = true;
     }
 
-    function unpause() external {
-        // Would require proper access control
+    function unpause() external override {
+        // Would require proper access control in production
         paused = false;
     }
 } 
