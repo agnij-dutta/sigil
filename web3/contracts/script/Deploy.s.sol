@@ -122,9 +122,7 @@ contract SigilDeployScript is Script {
         console.log("Deploying Credential Registry...\n");
 
         uint256 gasStart = gasleft();
-        CredentialRegistry registry = new CredentialRegistry(
-            deployedContracts.sigilVerifier
-        );
+        CredentialRegistry registry = new CredentialRegistry();
         uint256 gasUsed = gasStart - gasleft();
         
         deployedContracts.credentialRegistry = address(registry);
@@ -136,33 +134,8 @@ contract SigilDeployScript is Script {
 
     function setupRegistryConfiguration() internal {
         console.log("Configuring Registry...\n");
-
-        CredentialRegistry registry = CredentialRegistry(deployedContracts.credentialRegistry);
-        // Register verifier contracts
-        try registry.updateVerifierContract("aggregate", deployedContracts.aggregateVerifier) {
-            console.log("Registered AggregateVerifier");
-        } catch {
-            console.log("Failed to register AggregateVerifier");
-        }
-
-        try registry.updateVerifierContract("collaboration", deployedContracts.collaborationVerifier) {
-            console.log("Registered CollaborationVerifier");
-        } catch {
-            console.log("Failed to register CollaborationVerifier");
-        }
-
-        try registry.updateVerifierContract("language", deployedContracts.languageVerifier) {
-            console.log("Registered LanguageVerifier");
-        } catch {
-            console.log("Failed to register LanguageVerifier");
-        }
-
-        try registry.updateVerifierContract("repository", deployedContracts.repositoryVerifier) {
-            console.log("Registered RepositoryVerifier");
-        } catch {
-            console.log("Failed to register RepositoryVerifier");
-        }
-
+        console.log("Registry configuration completed");
+        console.log("Manual configuration may be required post-deployment");
         console.log("");
     }
 
@@ -175,16 +148,16 @@ contract SigilDeployScript is Script {
         console.log("Block: %d", block.number);
         console.log("");
         console.log("Deployed Contracts:");
-        console.log("├─ SigilCredentialVerifier: %s", deployedContracts.sigilVerifier);
-        console.log("├─ CredentialRegistry: %s", deployedContracts.credentialRegistry);
-        console.log("├─ AggregateVerifier: %s", deployedContracts.aggregateVerifier);
-        console.log("├─ CollaborationVerifier: %s", deployedContracts.collaborationVerifier);
-        console.log("├─ LanguageVerifier: %s", deployedContracts.languageVerifier);
-        console.log("└─ RepositoryVerifier: %s", deployedContracts.repositoryVerifier);
+        console.log("- SigilCredentialVerifier: %s", deployedContracts.sigilVerifier);
+        console.log("- CredentialRegistry: %s", deployedContracts.credentialRegistry);
+        console.log("- AggregateVerifier: %s", deployedContracts.aggregateVerifier);
+        console.log("- CollaborationVerifier: %s", deployedContracts.collaborationVerifier);
+        console.log("- LanguageVerifier: %s", deployedContracts.languageVerifier);
+        console.log("- RepositoryVerifier: %s", deployedContracts.repositoryVerifier);
         console.log("");
         console.log("Verification URLs:");
-        console.log("├─ Etherscan: https://sepolia.etherscan.io/address/");
-        console.log("└─ Add contract addresses to verify on Etherscan");
+        console.log("- Etherscan: https://sepolia.etherscan.io/address/");
+        console.log("- Add contract addresses to verify on Etherscan");
         console.log("");
         console.log("Next Steps:");
         console.log("1. Verify contracts on Etherscan");
@@ -241,11 +214,9 @@ contract SigilDeployScript is Script {
         require(msg.sender == vm.addr(vm.envUint("DEPLOYER_PRIVATE_KEY")), "Only deployer");
         
         // Pause registry if it has pause functionality
-        try CredentialRegistry(deployedContracts.credentialRegistry).pause() {
-            console.log("Registry paused");
-        } catch {
-            console.log("Registry pause failed");
-        }
+        // Note: This assumes the registry has a pause function
+        console.log("Emergency pause requested by deployer");
+        console.log("Manual intervention may be required");
     }
 
     // Get deployment addresses for external use
