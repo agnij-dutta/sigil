@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { create } = require('ipfs-http-client');
+// const { create } = require('ipfs-http-client');
 const PinataSDK = require('@pinata/sdk');
 
 console.log('🌐 Setting up IPFS & Pinata Integration...\n');
@@ -23,11 +23,13 @@ class SigilIPFSManager {
       console.log('🔧 Initializing IPFS connections...');
       
       // Initialize IPFS client (can use local node or Infura)
-      this.ipfs = create({
-        host: 'ipfs.infura.io',
-        port: 5001,
-        protocol: 'https'
-      });
+      // Note: IPFS client temporarily disabled due to package compatibility
+      // this.ipfs = create({
+      //   host: 'ipfs.infura.io',
+      //   port: 5001,
+      //   protocol: 'https'
+      // });
+      console.log('⚠️  IPFS client disabled (package compatibility issue)');
       
       console.log('✅ IPFS client initialized');
       

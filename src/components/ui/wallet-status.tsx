@@ -3,22 +3,35 @@
 import { useWallet } from "../../../web3/wallet/hooks/useWallet";
 import { formatWalletAddress } from "../../../web3/utils/wallet";
 import { Badge } from "./badge";
-import { Wallet, Copy, ExternalLink } from "lucide-react";
+import { Button } from "./button";
+import { Wallet, Copy, ExternalLink, Shield, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 interface WalletStatusProps {
   className?: string;
   showBalance?: boolean;
   showActions?: boolean;
+  showCredentials?: boolean;
 }
 
 export function WalletStatus({ 
   className = "", 
   showBalance = true, 
-  showActions = true 
+  showActions = true,
+  showCredentials = false
 }: WalletStatusProps) {
-  const { walletInfo, hasWallet, isAuthenticated } = useWallet();
+  const { 
+    walletInfo, 
+    hasWallet, 
+    isAuthenticated,
+    credentials,
+    loadingCredentials,
+    fetchCredentials,
+    registerCredential
+  } = useWallet();
+  
   const [copied, setCopied] = useState(false);
+  const [registering, setRegistering] = useState(false);
 
   const copyAddress = async () => {
     if (walletInfo.address) {
@@ -28,9 +41,35 @@ export function WalletStatus({
     }
   };
 
-  const openEtherscan = () => {
+  const openSepoliaScan = () => {
     if (walletInfo.address) {
-      window.open(`https://etherscan.io/address/${walletInfo.address}`, '_blank');
+      window.open(`https://sepolia.etherscan.io/address/${walletInfo.address}`, '_blank');
+    }
+  };
+
+  const handleRegisterDemoCredential = async () => {
+    try {
+      setRegistering(true);
+      const result = await registerCredential(
+        "demo",
+        "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+        JSON.stringify({
+          type: "demo",
+          timestamp: Date.now(),
+          description: "Demo credential registration"
+        })
+      );
+      
+      if (result.success) {
+        console.log("Demo credential registered successfully:", result.hash);
+        fetchCredentials(); // Refresh credentials
+      } else {
+        console.error("Failed to register credential:", result.error);
+      }
+    } catch (error) {
+      console.error("Error registering demo credential:", error);
+    } finally {
+      setRegistering(false);
     }
   };
 
@@ -56,46 +95,106 @@ export function WalletStatus({
   }
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={`space-y-3 ${className}`}>
       {/* Status Header */}
       <div className="flex items-center gap-2">
         <Wallet className="w-4 h-4 text-green-500" />
         <span className="text-sm font-medium">Wallet Connected</span>
         <Badge variant="secondary" className="text-xs">
-          {walletInfo.network || 'Ethereum'}
+          {walletInfo.network || 'Sepolia Testnet'}
         </Badge>
       </div>
 
-      {/* Address */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground font-mono">
-          {formatWalletAddress(walletInfo.address)}
-        </span>
+      {/* Address with overflow handling */}
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-muted-foreground font-mono truncate" title={walletInfo.address || ""}>
+            {formatWalletAddress(walletInfo.address, 6)}
+          </div>
+        </div>
         
         {showActions && (
-          <div className="flex gap-1">
-            <button
+          <div className="flex gap-1 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={copyAddress}
-              className="p-1 hover:bg-muted rounded transition-colors"
+              className="h-6 w-6 p-0 hover:bg-muted"
               title="Copy address"
             >
               <Copy className="w-3 h-3" />
-            </button>
-            <button
-              onClick={openEtherscan}
-              className="p-1 hover:bg-muted rounded transition-colors"
-              title="View on Etherscan"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={openSepoliaScan}
+              className="h-6 w-6 p-0 hover:bg-muted"
+              title="View on Sepolia Etherscan"
             >
               <ExternalLink className="w-3 h-3" />
-            </button>
+            </Button>
           </div>
         )}
       </div>
 
-      {/* Balance */}
-      {showBalance && walletInfo.balance && (
+      {/* Balance - Sepolia ETH */}
+      {showBalance && (
         <div className="text-xs text-muted-foreground">
-          Balance: {parseFloat(walletInfo.balance).toFixed(4)} ETH
+          <span className="font-medium">Sepolia Balance:</span>{" "}
+          {walletInfo.balance ? `${parseFloat(walletInfo.balance).toFixed(4)} ETH` : "Loading..."}
+        </div>
+      )}
+
+      {/* Credentials Section */}
+      {showCredentials && (
+        <div className="space-y-2 pt-2 border-t border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-3 h-3 text-blue-500" />
+              <span className="text-xs font-medium">Credentials</span>
+              <Badge variant="outline" className="text-xs">
+                {credentials.length}
+              </Badge>
+            </div>
+            {loadingCredentials && (
+              <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          
+          {credentials.length > 0 ? (
+            <div className="space-y-1">
+              {credentials.slice(0, 3).map((credential, index) => (
+                <div key={index} className="text-xs text-muted-foreground font-mono truncate">
+                  {formatWalletAddress(credential, 8)}
+                </div>
+              ))}
+              {credentials.length > 3 && (
+                <div className="text-xs text-muted-foreground">
+                  +{credentials.length - 3} more
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">No credentials found</div>
+          )}
+          
+          {/* Demo credential registration */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRegisterDemoCredential}
+            disabled={registering}
+            className="w-full h-7 text-xs"
+          >
+            {registering ? (
+              <>
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                Registering...
+              </>
+            ) : (
+              "Register Demo Credential"
+            )}
+          </Button>
         </div>
       )}
 

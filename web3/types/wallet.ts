@@ -56,6 +56,8 @@ export interface WalletInfo {
   connectionState: WalletConnectionState;
   balance?: string;
   network?: string;
+  chainId?: number;
+  credentials?: string[];
   error?: string;
 }
 
@@ -70,6 +72,13 @@ export interface TransactionRequest {
 export interface TransactionResult {
   hash: string;
   success: boolean;
+  error?: string;
+}
+
+// Credential Registration Types
+export interface CredentialRegistrationResult {
+  success: boolean;
+  hash?: string;
   error?: string;
 }
 
@@ -89,8 +98,19 @@ export interface UseWalletReturn {
   signOut: () => Promise<void>;
   createWallet: () => Promise<void>;
   sendTransaction: (request: TransactionRequest) => Promise<TransactionResult>;
+  registerCredential: (
+    credentialType: string,
+    credentialHash: string,
+    metadata: string
+  ) => Promise<CredentialRegistrationResult>;
   
-  // Error handling
-  error: Error | null;
+  // Utilities
   clearError: () => void;
+  error: Error | null;
+  
+  // Contract interactions
+  credentials: string[];
+  loadingCredentials: boolean;
+  fetchCredentials: () => Promise<void>;
+  fetchBalance: () => Promise<void>;
 } 

@@ -10,21 +10,38 @@ import {
   TransactionRequest, 
   TransactionResult 
 } from "../../types/wallet";
-import { formatEther, createPublicClient, http } from "viem";
-import { mainnet } from "viem/chains";
+import { formatEther, createPublicClient, createWalletClient, http, custom } from "viem";
+import { sepolia } from "viem/chains";
+import { SEPOLIA_RPC_URL, ContractService } from "../../../src/lib/contracts";
 
 export function useWallet(): UseWalletReturn {
   const userContext = useUser();
   const [error, setError] = useState<Error | null>(null);
   const [balance, setBalance] = useState<string | undefined>();
+  const [credentials, setCredentials] = useState<string[]>([]);
+  const [loadingCredentials, setLoadingCredentials] = useState(false);
 
-  // Create public client for reading blockchain data
+  // Create public client for reading Sepolia blockchain data
   const publicClient = useMemo(() => {
     return createPublicClient({
-      chain: mainnet,
-      transport: http(),
+      chain: sepolia,
+      transport: http(SEPOLIA_RPC_URL),
     });
   }, []);
+
+  // Create wallet client when user has wallet
+  const walletClient = useMemo(() => {
+    if (!userHasWallet(userContext)) return null;
+    
+    try {
+      return createWalletClient({
+        chain: sepolia,
+        transport: custom(userContext.ethereum.wallet),
+      });
+    } catch {
+      return null;
+    }
+  }, [userContext]);
 
   // Clear error handler
   const clearError = useCallback(() => {
@@ -60,7 +77,9 @@ export function useWallet(): UseWalletReturn {
         isConnected: true,
         connectionState: WalletConnectionState.CONNECTED,
         balance,
-        network: "ethereum", // Civic Auth uses Ethereum by default
+        network: "Sepolia Testnet", // Updated to show Sepolia
+        chainId: 11155111,
+        credentials,
       };
     }
 
@@ -70,28 +89,51 @@ export function useWallet(): UseWalletReturn {
       connectionState: WalletConnectionState.ERROR,
       error: "Invalid wallet state",
     };
-  }, [userContext, hasWallet, balance]);
+  }, [userContext, hasWallet, balance, credentials]);
 
-  // Fetch wallet balance
+  // Fetch wallet balance from Sepolia
   const fetchBalance = useCallback(async () => {
     if (!hasWallet || !userHasWallet(userContext)) return;
 
     try {
       const address = userContext.ethereum.address as `0x${string}`;
       const balanceResult = await publicClient.getBalance({ address });
-      setBalance(formatEther(balanceResult));
+      const ethBalance = formatEther(balanceResult);
+      setBalance(ethBalance);
     } catch (err) {
-      console.error("Failed to fetch balance:", err);
+      console.error("Failed to fetch Sepolia balance:", err);
       setError(err as Error);
     }
   }, [hasWallet, userContext, publicClient]);
 
-  // Fetch balance when wallet is connected
+  // Fetch user credentials from deployed contracts
+  const fetchCredentials = useCallback(async () => {
+    if (!hasWallet || !userHasWallet(userContext)) return;
+
+    try {
+      setLoadingCredentials(true);
+      const address = userContext.ethereum.address as `0x${string}`;
+      const userCredentials = await ContractService.getCredentials(address);
+      setCredentials(userCredentials);
+    } catch (err) {
+      console.error("Failed to fetch credentials:", err);
+      setError(err as Error);
+    } finally {
+      setLoadingCredentials(false);
+    }
+  }, [hasWallet, userContext]);
+
+  // Fetch balance and credentials when wallet is connected
   useEffect(() => {
     if (hasWallet) {
       fetchBalance();
+      fetchCredentials();
+      
+      // Set up periodic balance refresh
+      const interval = setInterval(fetchBalance, 30000); // Refresh every 30 seconds
+      return () => clearInterval(interval);
     }
-  }, [hasWallet, fetchBalance]);
+  }, [hasWallet, fetchBalance, fetchCredentials]);
 
   // Sign in handler
   const signIn = useCallback(async () => {
@@ -112,6 +154,7 @@ export function useWallet(): UseWalletReturn {
       setError(null);
       await userContext.signOut();
       setBalance(undefined);
+      setCredentials([]);
     } catch (err) {
       const error = err as Error;
       console.error("Sign-out failed:", error);
@@ -135,29 +178,31 @@ export function useWallet(): UseWalletReturn {
       // Type assertion for wallet creation - Civic Auth provides this method
       const userContextWithCreate = userContext as any;
       await userContextWithCreate.createWallet();
-      // Fetch balance after wallet creation
-      setTimeout(fetchBalance, 1000);
+      // Fetch balance and credentials after wallet creation
+      setTimeout(() => {
+        fetchBalance();
+        fetchCredentials();
+      }, 2000);
     } catch (err) {
       const error = err as Error;
       console.error("Wallet creation failed:", error);
       setError(error);
       throw error;
     }
-  }, [userContext, hasWallet, fetchBalance]);
+  }, [userContext, hasWallet, fetchBalance, fetchCredentials]);
 
-  // Send transaction handler
+  // Send transaction handler for Sepolia
   const sendTransaction = useCallback(async (request: TransactionRequest): Promise<TransactionResult> => {
-    if (!hasWallet || !userHasWallet(userContext)) {
+    if (!hasWallet || !userHasWallet(userContext) || !walletClient) {
       throw new Error("Wallet not connected");
     }
 
     try {
       setError(null);
-      const { wallet } = userContext.ethereum;
       
-      const hash = await wallet.sendTransaction({
+      const hash = await walletClient.sendTransaction({
         account: userContext.ethereum.address as `0x${string}`,
-        chain: mainnet,
+        chain: sepolia,
         to: request.to as `0x${string}`,
         value: request.value || BigInt(0),
         data: request.data as `0x${string}` | undefined,
@@ -165,7 +210,7 @@ export function useWallet(): UseWalletReturn {
       });
 
       // Refresh balance after transaction
-      setTimeout(fetchBalance, 2000);
+      setTimeout(fetchBalance, 3000);
 
       return {
         hash,
@@ -181,7 +226,41 @@ export function useWallet(): UseWalletReturn {
         error: error.message,
       };
     }
-  }, [hasWallet, userContext, fetchBalance]);
+  }, [hasWallet, userContext, walletClient, fetchBalance]);
+
+  // Register demo credential on Sepolia
+  const registerCredential = useCallback(async (
+    credentialType: string,
+    credentialHash: string,
+    metadata: string
+  ): Promise<{ success: boolean; hash?: string; error?: string }> => {
+    if (!hasWallet || !userHasWallet(userContext) || !walletClient) {
+      throw new Error("Wallet not connected");
+    }
+
+    try {
+      setError(null);
+      const address = userContext.ethereum.address as `0x${string}`;
+      
+      // Use the corrected demo credential registration
+      const result = await ContractService.registerDemoCredential(
+        walletClient,
+        address
+      );
+
+      if (result.success) {
+        // Refresh credentials after successful registration
+        setTimeout(fetchCredentials, 3000);
+      }
+
+      return result;
+    } catch (err) {
+      const error = err as Error;
+      console.error("Credential registration failed:", error);
+      setError(error);
+      return { success: false, error: error.message };
+    }
+  }, [hasWallet, userContext, walletClient, fetchCredentials]);
 
   return {
     // User and authentication
@@ -198,9 +277,16 @@ export function useWallet(): UseWalletReturn {
     signOut,
     createWallet,
     sendTransaction,
+    registerCredential,
     
-    // Error handling
-    error,
+    // Utilities
     clearError,
+    error,
+    
+    // Contract interactions
+    credentials,
+    loadingCredentials,
+    fetchCredentials,
+    fetchBalance,
   };
 } 

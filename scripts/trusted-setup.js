@@ -24,17 +24,22 @@ const CIRCUITS = [
 // Check SnarkJS installation
 function checkSnarkJS() {
   try {
-    const version = execSync('snarkjs --version', { encoding: 'utf8' });
-    console.log(`✅ SnarkJS found: ${version.trim()}`);
-    return true;
-  } catch (error) {
-    console.error('❌ SnarkJS not found. Installing...');
-    try {
-      execSync('npm install -g snarkjs', { stdio: 'inherit' });
-      console.log('✅ SnarkJS installed successfully');
+    // SnarkJS --version returns non-zero exit code but still works
+    // Use --help instead which always works
+    const output = execSync('snarkjs --help 2>/dev/null | head -n 1', { encoding: 'utf8' });
+    if (output.includes('snarkjs@')) {
+      console.log(`✅ SnarkJS found: ${output.trim()}`);
       return true;
-    } catch (installError) {
-      console.error('❌ Failed to install SnarkJS:', installError.message);
+    }
+    throw new Error('SnarkJS not found');
+  } catch (error) {
+    // Try checking if snarkjs binary exists
+    try {
+      execSync('which snarkjs', { encoding: 'utf8' });
+      console.log('✅ SnarkJS found: snarkjs binary available');
+      return true;
+    } catch (whichError) {
+      console.error('❌ SnarkJS not found. Please install it manually with: sudo npm install -g snarkjs');
       return false;
     }
   }
