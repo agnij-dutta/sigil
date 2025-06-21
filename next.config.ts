@@ -1,4 +1,4 @@
-import { createCivicAuthPlugin } from "@civic/auth/nextjs"
+import { createCivicAuthPlugin } from "@civic/auth-web3/nextjs"
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -11,7 +11,10 @@ const nextConfig: NextConfig = {
 };
 
 const withCivicAuth = createCivicAuthPlugin({
-  clientId: "5d40dfe1-7677-4fbf-9391-f7b36b7e6575"
+  clientId: process.env.NEXT_PUBLIC_CIVIC_CLIENT_ID || "5d40dfe1-7677-4fbf-9391-f7b36b7e6575",
+  loginSuccessUrl: "/dashboard",
+  include: ["/dashboard/*", "/api/protected/*"],
+  exclude: ["/", "/api/auth/*", "/api/github/*"],
 });
 
 export default withCivicAuth(nextConfig)
