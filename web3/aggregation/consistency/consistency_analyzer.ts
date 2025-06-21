@@ -5,7 +5,7 @@
  * across multiple repositories to generate consistency scores for credential generation.
  */
 
-import { createHash } from 'crypto';
+//import { createHash } from 'crypto';
 import { 
     RepositoryData, 
     CommitData, 
